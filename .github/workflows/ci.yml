@@ -1,0 +1,71 @@
+name: Z Motion CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: z-motion-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: Verify Windows installation lifecycle
+        if: runner.os == 'Windows'
+        run: npm run test:installer
+      - name: Build Windows installers
+        if: runner.os == 'Windows'
+        run: npm run package:windows
+      - name: Verify self-contained EXE installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release/z-motion-*-setup.exe | Select-Object -First 1
+          $sandbox = Join-Path $env:RUNNER_TEMP 'z-motion-exe-test'
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList @('/sandbox', "`"$sandbox`"") -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'EXE installation failed.' }
+          if (!(Test-Path (Join-Path $sandbox 'extensions/com.zielis.z-motion/CSXS/manifest.xml'))) { throw 'EXE installation did not produce a manifest.' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.os }}
+          path: |
+            coverage/lcov.info
+            playwright-report
+            test-results
+            artifacts/curves-*.png
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: success() && runner.os == 'Windows'
+        with:
+          name: z-motion-windows
+          path: |
+            release/z-motion-*-setup.exe
+            release/z-motion-*-windows.zip
+            release/sha256sums.txt
+          if-no-files-found: error
+          retention-days: 30

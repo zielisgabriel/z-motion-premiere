@@ -1,0 +1,90 @@
+{
+  "repository": "zielisgabriel/z-motion-premiere",
+  "preparedDate": "2026-11-03",
+  "originalBuildDate": "2026-11-02",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "tag": "v0.1.0",
+      "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v0.1.0",
+      "prerelease": true,
+      "snapshot": "recovered-packaged-runtime",
+      "checksums": "z-motion-0.1.0-sha256sums.txt",
+      "artifacts": [
+        {
+          "name": "z-motion-0.1.0-setup.exe",
+          "size": 418304,
+          "sha256": "f2d41a1eaf798275394d4bf4326ab919189741c9a0af8279d271093dfcd8659e"
+        },
+        {
+          "name": "z-motion-0.1.0-windows.zip",
+          "size": 403045,
+          "sha256": "0cafdb98d4cfcaa64c492723418dddf1e7c403f6c77db55e0cf51475994133a6"
+        }
+      ],
+      "recoveryCommit": "b9e8c5155c0a2b81376021cd705a848467446b5c"
+    },
+    {
+      "version": "1.0.0",
+      "tag": "v1.0.0",
+      "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.0.0",
+      "prerelease": false,
+      "snapshot": "recovered-packaged-runtime",
+      "checksums": "z-motion-1.0.0-sha256sums.txt",
+      "artifacts": [
+        {
+          "name": "z-motion-1.0.0-setup.exe",
+          "size": 433152,
+          "sha256": "588898a2399e611edb7a4186c1380dba00856aa9f49525463af41cf470f693bc"
+        },
+        {
+          "name": "z-motion-1.0.0-windows.zip",
+          "size": 417582,
+          "sha256": "74cfbd7448ad731fbcc97f48638f8efccfbe778b29c2b00b801a4645b29adcee"
+        }
+      ],
+      "recoveryCommit": "301283df049ffc5852278692dcf40b67f025329c"
+    },
+    {
+      "version": "1.0.1",
+      "tag": "v1.0.1",
+      "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.0.1",
+      "prerelease": false,
+      "snapshot": "recovered-packaged-runtime",
+      "checksums": "z-motion-1.0.1-sha256sums.txt",
+      "artifacts": [
+        {
+          "name": "z-motion-1.0.1-setup.exe",
+          "size": 436736,
+          "sha256": "2d56b83a7720242263bc0b1998a0278b32a85163e5a33199b74c4b4989c69344"
+        },
+        {
+          "name": "z-motion-1.0.1-windows.zip",
+          "size": 421446,
+          "sha256": "bda1b7d3473b442e3d13681943c143c0de3dbc7bc40b21fa2adc6189f11d394f"
+        }
+      ],
+      "recoveryCommit": "ed00018fdbf35f62c82cdd1865bd3ba1eaac8d34"
+    },
+    {
+      "version": "1.0.2",
+      "tag": "v1.0.2",
+      "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.0.2",
+      "prerelease": false,
+      "snapshot": "maintained-source",
+      "checksums": "z-motion-1.0.2-sha256sums.txt",
+      "artifacts": [
+        {
+          "name": "z-motion-1.0.2-setup.exe",
+          "size": 440320,
+          "sha256": "391a06e2a25b881ae66fe69e6d5a6280ee32fa75359fe70d3ddc1067e8cd7f0a"
+        },
+        {
+          "name": "z-motion-1.0.2-windows.zip",
+          "size": 424744,
+          "sha256": "8e51f36b3b3e29ee6c5b6ad83b81b25f809918524e6d4a47f75ab057da91be97"
+        }
+      ]
+    }
+  ]
+}

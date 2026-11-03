@@ -24,7 +24,7 @@ The first context query is deferred until the user enters or focuses the editor.
 
 The domain uses decimal tick strings and BigInt to avoid losing precision on long timelines. It accepts frame-aligned endpoint pairs 2–1800 frames apart. Both endpoint samples preserve their original times and values. Only internal samples are written. Endpoint interpolation is set to linear alongside the generated keys to represent the baked curve. Neighboring key values/times are retained; changing endpoint interpolation can affect interpolation into neighboring segments. CEP does not expose enough easing metadata to guarantee preservation of their tangents.
 
-The guarantee is equality at sampled sequence frames. Subframe rendering, motion blur and an effect's internal spatial interpolation are not represented by the timing preview. The preview animates a Z marker using the loaded numeric/2D parameter values; it is not a rendered video monitor.
+Generated values are checked at sampled sequence frames. Since 1.0.2, scalar storage readback allows an absolute difference of at most max(0.00001, abs(requested) * 0.0000001); the curve plan, original endpoints, neighbors and 2D Position values retain the stricter validation. This bounded tolerance covers modeled scalar rounding and does not replace actual playback validation. Subframe rendering, motion blur and an effect's internal spatial interpolation are not represented by the timing preview. The preview animates a Z marker using the loaded numeric/2D parameter values; it is not a rendered video monitor.
 
 ## Reapplication and consistency
 

@@ -14,19 +14,19 @@ Premiere's public API does not expose which keyframes are highlighted in Effect 
 
 The first Adobe query waits until you enter the editor, so opening the panel does not query a project during Premiere startup.
 
-The preview animates the Z marker using the same numeric samples that are sent to Premiere. Its duration comes from the existing keyframes. It illustrates the parameter's timing and relative movement; it is not a rendered video preview. Native equality is checked at sampled frames. Subframe rendering and motion blur are outside that guarantee.
+The preview animates the Z marker using the same numeric samples that are sent to Premiere. Its duration comes from the existing keyframes. It illustrates the parameter's timing and relative movement; it is not a rendered video preview. Native values are checked at sampled frames, allowing only bounded storage rounding for generated scalar values. Subframe rendering and motion blur are outside that guarantee.
 
 ## Install on Windows
 
 1. Close Premiere Pro.
-2. Run `release/z-motion-1.0.1-setup.exe` and choose **Install Z Motion**.
+2. Download [z-motion-1.0.2-setup.exe](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.0.2/z-motion-1.0.2-setup.exe), run it and choose **Install Z Motion**.
 3. Open Premiere Pro 2026, then **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
 
 The installer includes the compiled panel, host script, original Z icon, Argentum Sans fonts and documentation. No Node.js, npm, After Effects or separate font installation is required on the editing machine. Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are used by setup.
 
 This is a local unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for local unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
 
-Alternatively, extract `z-motion-1.0.1-windows.zip` completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
+Alternatively, download [z-motion-1.0.2-windows.zip](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.0.2/z-motion-1.0.2-windows.zip), extract it completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -EnableUnsigned -PremierePath 'D:\Adobe\Adobe Premiere Pro 2026'
@@ -34,9 +34,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -Enab
 
 The destination is `%APPDATA%\Adobe\CEP\extensions\com.zielis.z-motion`. The installed folder contains `uninstall-z-motion.cmd`. Uninstallation preserves other extensions and legacy local preset data. The shared Adobe developer setting is retained by default; the PowerShell uninstaller accepts `-RestoreDeveloperSetting` when explicitly requested.
 
-## Version 1.0.1
+## Version 1.0.2
 
-This patch fixes premature key-creation rejection and native time-argument compatibility. It verifies that each generated key exists at the requested time and reads back the written value. See the [fix report](docs/bug-fixes/transform-position-keyframes.md). Restore the original two-key interval if a previous failed attempt added intermediate keys. Native playback still requires verification in Premiere.
+The user confirmed Position works in 1.0.1 and reported a Scale value-readback error. This patch accepts bounded storage rounding for generated scalar values while retaining strict endpoint, snapshot and 2D Position checks. Larger mismatches, clamps and no-op writes still fail. Errors include both the requested and stored values.
+
+See the [Scale precision report](docs/bug-fixes/scale-readback-precision.md) and the [earlier Position fix](docs/bug-fixes/transform-position-keyframes.md). Restore the original endpoint pair if a failed attempt added intermediate keys. Scale application and playback in 1.0.2 still require a native retest.
 
 ## Supported ranges
 
@@ -88,7 +90,7 @@ The build targets Chromium 99, emits an IIFE with local relative assets and pack
 | `installer`, `scripts` | Installation, packaging and isolated verification |
 | `tests` | Adobe API fixture and real-browser user flows |
 
-The GitHub Actions workflow checks Linux and Windows, produces browser evidence and builds Windows installer artifacts. It activates when these files are pushed to a GitHub repository. No GitHub run is claimed without run evidence.
+The GitHub Actions workflow checks Linux and Windows, produces browser evidence and builds Windows installer artifacts. It runs on main pushes, pull requests and manual dispatch. Actual remote run outcomes are recorded in the publication report.
 
 Read the [current implementation report](docs/implementation-report.md), [v1 decision](docs/decisions/curve-only-v1.md), [initial audit](docs/project-audit.md) and [archived toolkit prototype report](docs/history/toolkit-prototype-report.md) before continuing. Transform tools, movement recipes and the preset library were removed from the active product at the user's request. The archived reports retain the earlier work and rationale for future development.
 
@@ -97,3 +99,7 @@ New source files use kebab-case, code and documentation are in English, and expl
 ## Provenance
 
 Z Motion is an independent implementation. The supplied Motion 4.3.0 distribution was inspected read-only; none of its code, binaries, presets or artwork is redistributed. The supplied Z Motion icon is used as requested. Argentum Sans is bundled under the SIL Open Font License, and runtime dependency notices are included in `dist/licenses`.
+
+## Repository and releases
+
+[GitHub repository](https://github.com/zielisgabriel/z-motion-premiere), [releases](https://github.com/zielisgabriel/z-motion-premiere/releases), [changelog](changelog.md), [release provenance](docs/release-history.md) and [publication report](docs/git-and-release-report.md). The repository was initially created as private. Commits use Conventional Commits in English. The historical tags preserve packaged snapshots, while main and v1.0.2 contain maintained source.

@@ -1,6 +1,6 @@
 # Z Motion implementation report
 
-Date: 2026-11-02. Current version: 1.0.1, curve-only first release with a native keyframe compatibility fix. Current workspace: `C:/Users/Gabriel/Desktop/z-motion-premiere`.
+Date: 2026-11-02. Current version: 1.0.2, curve-only first release with native keyframe compatibility and scalar readback precision fixes. Current workspace: `C:/Users/Gabriel/Desktop/z-motion-premiere`.
 
 ## Current user-approved objective
 
@@ -28,13 +28,13 @@ The user also explicitly accepted automatic discovery of the pair surrounding th
 | --- | --- |
 | TypeScript / production CEP build | Passed |
 | ESLint | Passed |
-| Domain, transport, React and Adobe fixture tests | 32 passed, including 16 host boundary cases | 
+| Domain, transport, React and Adobe fixture tests | 38 passed, including 22 host boundary cases | 
 | Browser tests | 7 passed |
 | Browser coverage | Direct file loading; 280/400/1100 px layout; handle dragging; preview/native sample equality; ambiguous target selection; host rejection |
 | Installer lifecycle | Passed: install, upgrade, uninstall, repeat uninstall, neighbor preservation, corrupt payload rejection and path traversal rejection |
 | Measured unit coverage | Previous 1.0.0 measurement: 85.59% lines, 83.82% branches; not remeasured for this host-only fix, whose JSX tests are separate |
-| Live Premiere keyframe application | User reproduced a Transform / Position creation error in 1.0.0; native application of 1.0.1 remains pending |
-| Current Windows EXE and ZIP | 1.0.1 generated; isolated EXE installation passed and installed host/UI hashes matched the production build |
+| Live Premiere keyframe application | User confirmed Position works in 1.0.1; Scale readback failed there and native Scale validation of 1.0.2 remains pending |
+| Current Windows EXE and ZIP | 1.0.2 generated; EXE sandbox install passed and installed host/UI SHA-256 hashes matched the production build |
 | GitHub-hosted CI | Not run: no configured repository/remote in the initial workspace |
 
 Tests of the host use an explicit Adobe API fixture, not a live Premiere engine. Browser agreement tests capture actual Web Animations frames and compare their normalized progression with the sample values sent through the simulated CEP boundary. These do not certify native rendering.
@@ -80,7 +80,7 @@ The installed 1.0.0 copy predates the final deferred-query change. Premiere was 
 
 Historical 1.0.0 artifacts: `release/z-motion-1.0.0-setup.exe`, `release/z-motion-1.0.0-windows.zip` and `release/sha256sums.txt`. The final installer includes the deferred-query payload and these current documents.
 
-## Current 1.0.1 error correction
+## Historical 1.0.1 error correction
 
 The user subsequently reproduced a real Apply Animation failure in Premiere 26.5.1 using Transform / Position on a cursor image. The target loaded successfully; creation was rejected by the panel. The old host accepted only zero/true mutation results and supplied Time objects exclusively. A void result could therefore cause a false rejection before checking the created key. Adobe's sample also uses numeric seconds for mutation calls.
 
@@ -95,3 +95,25 @@ Premiere was running and responsive when the installed extension was inspected. 
 Release targets: release/z-motion-1.0.1-setup.exe, release/z-motion-1.0.1-windows.zip and release/sha256sums.txt.
 
 The Windows 1.0.1 EXE was executed in an isolated installation directory. Installation succeeded, the installed manifest reported 1.0.1, and both the installed host script and UI bundle matched the production build by SHA-256. Release verification evidence is saved in release/verification-1.0.1.json. This test did not alter the running Adobe extension, registry or project.
+
+## Current 1.0.2 Scale readback correction
+
+The user confirmed that Position is working in 1.0.1. They then reported a Scale failure at source time 3600.83333333333s with native result true. This failed after creation, during immediate scalar value verification. The component containing Scale and the requested/stored values were not supplied by the old error message.
+
+The strict host comparison could reject finite scalar values rounded by storage. A new regression modeled 30 fps, one-hour source time, true native results and float32 Scale values; it failed against the old host and passed with the correction. This is a reproduced candidate cause, not a measurement of the native discrepancy in the user's instance.
+
+Generated scalar readback now allows at most max(0.00001, abs(requested) * 0.0000001) absolute difference. The same bounded comparison is used immediately and during final generated-sample verification. Mathematical plan validation, original endpoint/neighbor preservation and 2D Position verification retain the previous strict comparison. Larger differences, clamps and successful-looking no-op writes still fail. Mismatch errors now report Requested and Stored values, source time and native result. No samples, time arguments or preview values were changed.
+
+See [the Scale fix report](bug-fixes/scale-readback-precision.md). The README and v1 decision record the tolerance explicitly. Package/lock versions, CEP manifest, panel footer, install paths and implementation plan now point to 1.0.2. No dependencies or CI workflow changes were required.
+
+Validation completed: npm run check passed ESLint, all 38 tests, TypeScript and production CEP packaging; all seven browser tests passed; installer lifecycle tests passed. The host suite contains 22 cases, including float32 and fixed-point scalar rounding, large values, Overshoot/reapplication, no-op writes returning true, a small wrong value exceeding tolerance and strict endpoint preservation. Native Scale playback remains pending; Position success is user-reported for their 1.0.1 scenario.
+
+At the process check, Premiere was open and responsive with extension 1.0.1 installed. The loaded extension was not overwritten, no keys were written by the agent and the project was not saved. Close Premiere to install the new EXE. Restore the intended original pair if the previous failed attempt inserted intermediate keys, then validate Scale and reapplication. If failure remains, the complete new Requested/Stored error is the next diagnostic evidence.
+
+Release targets: release/z-motion-1.0.2-setup.exe, release/z-motion-1.0.2-windows.zip, release/sha256sums.txt and release/verification-1.0.2.json.
+
+The 1.0.2 setup EXE passed an isolated installation. Its installed manifest reported 1.0.2, and the host/UI hashes matched dist. The final release includes this handoff; release/verification-1.0.2.json records final artifact verification. The running Adobe extension and the user's project were left unchanged.
+
+## Git/GitHub publication preparation: 2026-11-03
+
+The user requested English Conventional Commits, a GitHub repository and releases for all four generated versions. Original binaries are preserved with version-specific SHA-256 files. Earlier tags recover their compiled packages honestly; current source is retained on main and v1.0.2. See [publication report](git-and-release-report.md), [release provenance](release-history.md) and [changelog](../changelog.md) for the final publication and CI status. The product version and native validation limits are unchanged.
