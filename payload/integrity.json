@@ -1,7 +1,7 @@
 {
   "product": "Z Motion",
   "id": "com.zielis.z-motion",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "files": [
     {
       "path": "assets/argentum-sans-black-DdPl19Fw.ttf",
@@ -21,15 +21,15 @@
     },
     {
       "path": "assets/z-motion.js",
-      "sha256": "8e9300417a7a8dded05a3067133253f7c0b2871ff748ea2c0ff5b62c22fa2939"
+      "sha256": "d218f2184f86e58f71f4923d9debbb8e4abd3c84859be26e14f4d3440f2c2a43"
     },
     {
       "path": "CSXS/manifest.xml",
-      "sha256": "42311382be32657c8e7a821680372d60f85827900fadd5b76a5e229192dc38bd"
+      "sha256": "0bf7da612f929ca93e7b6165b8f74bb7b2c145c287393754e528c900dfa70887"
     },
     {
       "path": "host/z-motion-host.jsx",
-      "sha256": "473aacbe06318b34e160f9341d2065d90db525b4df5dd40be9a458b2755240fb"
+      "sha256": "72e4a364d7a640547e66988d994183bf1496b1a8117f2977ecb058074d6ea017"
     },
     {
       "path": "images/icon.png",
@@ -37,7 +37,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "062bfb2c4b05cb93fdfdf8e22b5211338a2da9de3ca6d1eec1d4cf55d8f31b33"
+      "sha256": "2b29bc9dcd87cdcfe4c7d5a30a8da6fe8e2192a9a30859b75c7a2e077331c397"
     },
     {
       "path": "licenses/argentum-sans-ofl.txt",

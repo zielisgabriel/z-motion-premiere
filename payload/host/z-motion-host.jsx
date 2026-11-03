@@ -112,231 +112,207 @@ var ZMotionJson = (function () {
     return { parse: parse, stringify: stringify };
 }());
 
+var ZMotionRanges = typeof ZMotionRanges !== 'undefined' ? ZMotionRanges : {};
 var ZMotion = (function () {
     var ticksPerSecond = 254016000000;
-    var allowedMotions = { fade: true, 'slide-left': true, 'slide-right': true, 'slide-up': true, 'slide-down': true, zoom: true, spin: true };
 
     function fail(message) { throw new Error(message); }
-    function number(value, min, max, name) {
-        if (typeof value !== 'number' || !isFinite(value) || value < min || value > max) fail('Invalid ' + name + '.');
-        return value;
-    }
     function isArray(value) { return Object.prototype.toString.call(value) === '[object Array]'; }
-    function time(seconds) {
+    function numeric(value) {
+        if (typeof value === 'number') return isFinite(value);
+        return isArray(value) && value.length === 2 && typeof value[0] === 'number' && isFinite(value[0]) && typeof value[1] === 'number' && isFinite(value[1]);
+    }
+    function close(first, second) {
+        if (typeof first === 'number' && typeof second === 'number') return Math.abs(first - second) <= Math.max(0.0000001, Math.abs(second) * 0.00000001);
+        return isArray(first) && isArray(second) && first.length === second.length && close(first[0], second[0]) && close(first[1], second[1]);
+    }
+    function time(ticks) {
+        if (typeof ticks !== 'string' || !/^-?(0|[1-9][0-9]{0,20})$/.test(ticks)) fail('Invalid keyframe time.');
         var result = new Time();
-        result.seconds = Math.round(seconds * 100000000) / 100000000;
+        result.ticks = ticks;
         return result;
     }
     function successful(status, action) {
         if (status !== 0 && status !== true) fail('Premiere rejected ' + action + '.');
     }
-
     function context() {
-        var sequence = app.project && app.project.activeSequence;
-        var clips = [];
-        var ignoredAudio = 0;
-        var selected;
-        var index;
-        if (!sequence) return { sequence: null, clips: clips, ignoredAudio: 0, secondsPerFrame: 0, token: '' };
-        selected = sequence.getSelection();
-        for (index = 0; index < selected.length; index++) {
-            if (selected[index].mediaType === 'Video') clips.push(selected[index]);
-            else ignoredAudio++;
-        }
-        clips.sort(function (first, second) {
-            if (first.start.seconds !== second.start.seconds) return first.start.seconds - second.start.seconds;
-            return String(first.nodeId) < String(second.nodeId) ? -1 : 1;
-        });
-        var frame = Number(sequence.timebase) / ticksPerSecond;
-        number(frame, 1 / 240, 1, 'sequence frame rate');
-        var identifiers = [String(sequence.sequenceID), String(sequence.timebase)];
-        for (index = 0; index < clips.length; index++) {
-            identifiers.push([String(clips[index].nodeId), clips[index].start.seconds, clips[index].end.seconds, clips[index].inPoint.seconds]);
-        }
-        return { sequence: sequence, clips: clips, ignoredAudio: ignoredAudio, secondsPerFrame: frame, token: ZMotionJson.stringify(identifiers) };
-    }
-
-    function inspect() {
-        var state = context();
+        var project = app.project;
+        var sequence = project && project.activeSequence;
+        if (!sequence) return { message: 'Open a sequence and select one clip with two existing keyframes.' };
+        var selection = sequence.getSelection();
         var clips = [];
         var index;
-        for (index = 0; index < state.clips.length; index++) {
-            clips.push({ id: String(state.clips[index].nodeId), name: state.clips[index].name, durationFrames: Math.round((state.clips[index].end.seconds - state.clips[index].start.seconds) / state.secondsPerFrame) });
-        }
+        for (index = 0; index < selection.length; index++) if (selection[index].mediaType === 'Video') clips.push(selection[index]);
+        if (clips.length !== 1) return { message: 'Select one video clip with keyframes in Effect Controls.' };
+        var clip = clips[0];
+        if (typeof clip.getSpeed !== 'function' || Math.abs(clip.getSpeed() - 1) > 0.000001 || (typeof clip.isSpeedReversed === 'function' && clip.isSpeedReversed())) return { message: 'Use a forward clip at 100% speed for this version.' };
+        var sourceCursor = clip.inPoint.seconds + sequence.getPlayerPosition().seconds - clip.start.seconds;
         return {
-            hostVersion: String(app.version), sequenceId: state.sequence ? String(state.sequence.sequenceID) : '',
-            sequenceName: state.sequence ? state.sequence.name : 'No active sequence',
-            frameRate: state.sequence ? 1 / state.secondsPerFrame : 0,
-            width: state.sequence ? state.sequence.frameSizeHorizontal : 0,
-            height: state.sequence ? state.sequence.frameSizeVertical : 0,
-            clips: clips, ignoredAudio: state.ignoredAudio, selectionToken: state.token
+            sequence: sequence, clip: clip, sourceCursor: sourceCursor,
+            frameTicks: String(sequence.timebase),
+            identity: [String(project.documentID || project.path || ''), String(sequence.sequenceID), String(clip.nodeId)],
+            message: 'Place the playhead between two existing keyframes.'
         };
     }
-
-    function mutationContext(payload) {
-        var state = context();
-        if (!state.sequence) fail('Open a sequence in Premiere first.');
-        if (!state.clips.length) fail('Select at least one video clip in the timeline.');
-        if (state.clips.length > 50) fail('Select no more than 50 video clips per operation.');
-        if (payload.selectionToken !== state.token) fail('The timeline selection changed. Refresh and try again.');
-        return state;
-    }
-
-    function getParameter(clip, property) {
-        var opacity = property === 'opacity';
-        var names = opacity ? ['AE.ADBE Opacity', 'ADBE Opacity'] : ['AE.ADBE Motion', 'ADBE Motion'];
-        var indexes = { position: 0, scale: 1, rotation: 4, opacity: 0 };
-        var components = clip.components;
-        var component;
+    function findPair(keys, cursor, preferred) {
         var index;
-        for (index = 0; index < components.numItems; index++) {
-            if (components[index].matchName === names[0] || components[index].matchName === names[1]) component = components[index];
-        }
-        if (!component || indexes[property] === undefined || component.properties.numItems <= indexes[property]) fail('Unsupported ' + property + ' parameter on "' + clip.name + '". Use a standard video clip with native Motion and Opacity.');
-        if (property === 'scale' && component.properties.numItems > 3 && !component.properties[3].getValue()) fail('Enable Uniform Scale on "' + clip.name + '" before changing scale.');
-        return component.properties[indexes[property]];
-    }
-
-    function validateValue(value, property) {
-        if (property === 'position') {
-            if (!isArray(value) || value.length !== 2) fail('Unsupported position value.');
-            number(value[0], -100000, 100000, 'horizontal position');
-            number(value[1], -100000, 100000, 'vertical position');
-        } else number(value, -100000, 100000, property);
-    }
-
-    function validatePlan(payload) {
-        var recipe = payload.recipe;
-        var samples = payload.samples;
-        var index;
-        if (!recipe || !Object.prototype.hasOwnProperty.call(allowedMotions, recipe.motion)) fail('Unknown animation.');
-        if (recipe.direction !== 'in' && recipe.direction !== 'out') fail('Invalid animation direction.');
-        number(recipe.durationFrames, 2, 300, 'duration');
-        number(recipe.staggerFrames, 0, 120, 'stagger');
-        if (Math.floor(recipe.durationFrames) !== recipe.durationFrames || Math.floor(recipe.staggerFrames) !== recipe.staggerFrames) fail('Use whole frames.');
-        number(recipe.amount, 0, recipe.motion === 'spin' ? 1080 : 100, 'amount');
-        if (typeof recipe.replaceExisting !== 'boolean') fail('Invalid replacement policy.');
-        if (!isArray(samples) || samples.length !== recipe.durationFrames || samples[0] !== 0 || samples[samples.length - 1] !== 1) fail('Invalid keyframe samples.');
-        for (index = 0; index < samples.length; index++) number(samples[index], -2, 3, 'curve sample');
-        return recipe;
-    }
-
-    function propertyFor(motion) {
-        if (motion === 'fade') return 'opacity';
-        if (motion === 'zoom') return 'scale';
-        if (motion === 'spin') return 'rotation';
-        return 'position';
-    }
-
-    function animatedValue(base, progress, recipe) {
-        var offset = recipe.direction === 'in' ? 1 - progress : progress;
-        if (recipe.motion === 'fade') return Math.max(0, Math.min(100, base * (1 - offset)));
-        if (recipe.motion === 'zoom') return Math.max(0.1, base * (1 - offset * recipe.amount / 100));
-        if (recipe.motion === 'spin') return base - offset * recipe.amount;
-        var result = [base[0], base[1]];
-        var axis = recipe.motion === 'slide-left' || recipe.motion === 'slide-right' ? 0 : 1;
-        var sign = recipe.motion === 'slide-left' || recipe.motion === 'slide-down' ? -1 : 1;
-        result[axis] += sign * offset * recipe.amount / 100;
-        return result;
-    }
-
-    function prepareAnimation(clip, recipe, samples, frame, order) {
-        if (typeof clip.getSpeed !== 'function' || Math.abs(clip.getSpeed() - 1) > 0.000001 || (typeof clip.isSpeedReversed === 'function' && clip.isSpeedReversed())) fail('Use forward clips at 100% speed. Retimed clips are not supported yet.');
-        var frameCount = Math.floor((clip.end.seconds - clip.start.seconds) / frame + 0.00001);
-        var offset = order * recipe.staggerFrames;
-        var first = recipe.direction === 'in' ? offset : frameCount - recipe.durationFrames - offset;
-        if (first < 0 || first + recipe.durationFrames > frameCount) fail('"' + clip.name + '" is too short for this duration and stagger.');
-        var property = propertyFor(recipe.motion);
-        var parameter = getParameter(clip, property);
-        if (!parameter.areKeyframesSupported()) fail('Keyframes are not supported on "' + clip.name + '".');
-        var start = time(clip.inPoint.seconds + first * frame);
-        var end = time(clip.inPoint.seconds + (first + recipe.durationFrames - 1) * frame);
-        var baseTime = recipe.direction === 'in' ? end : start;
-        var base = parameter.isTimeVarying() ? parameter.getValueAtTime(baseTime) : parameter.getValue();
-        validateValue(base, property);
-        var keys = parameter.isTimeVarying() ? parameter.getKeys() : [];
-        var index;
-        var collisions = false;
-        if (keys) {
+        var first = null;
+        var last = null;
+        if (preferred) {
             for (index = 0; index < keys.length; index++) {
-                if (keys[index].seconds >= start.seconds - 0.000001 && keys[index].seconds <= end.seconds + 0.000001) collisions = true;
+                if (String(keys[index].ticks) === preferred.startTicks) first = keys[index];
+                if (String(keys[index].ticks) === preferred.endTicks) last = keys[index];
+            }
+            if (first && last && cursor >= first.seconds - 0.000001 && cursor <= last.seconds + 0.000001 && last.seconds > first.seconds) return [first, last];
+        }
+        for (index = 0; index < keys.length - 1; index++) {
+            if (cursor >= keys[index].seconds - 0.000001 && cursor < keys[index + 1].seconds - 0.000001) return [keys[index], keys[index + 1]];
+        }
+        if (keys.length > 1 && Math.abs(cursor - keys[keys.length - 1].seconds) < 0.000001) return [keys[keys.length - 2], keys[keys.length - 1]];
+        return null;
+    }
+    function kind(component, parameterIndex, value) {
+        if (isArray(value)) return 'position';
+        if (/^(AE\.)?ADBE Opacity$/.test(component.matchName) && parameterIndex === 0) return 'opacity';
+        if (/^(AE\.)?ADBE Motion$/.test(component.matchName)) {
+            if (parameterIndex === 1 || parameterIndex === 2) return 'scale';
+            if (parameterIndex === 4) return 'rotation';
+        }
+        return 'value';
+    }
+    function rangeToken(state, componentIndex, parameterIndex, parameter, keys, pair) {
+        var entries = [];
+        var index;
+        for (index = 0; index < keys.length; index++) {
+            if (keys[index].seconds >= pair[0].seconds - 0.000001 && keys[index].seconds <= pair[1].seconds + 0.000001) entries.push([String(keys[index].ticks), parameter.getValueAtKey(keys[index])]);
+        }
+        var component = state.clip.components[componentIndex];
+        var descriptor = [componentIndex, parameterIndex, String(component.matchName), String(parameter.displayName), state.clip.components.numItems, component.properties.numItems];
+        return ZMotionJson.stringify([state.identity, descriptor, state.clip.start.seconds, state.clip.end.seconds, state.clip.inPoint.seconds, state.frameTicks, entries]);
+    }
+    function describeTarget(state, componentIndex, parameterIndex, preferred) {
+        var component = state.clip.components[componentIndex];
+        var parameter = component.properties[parameterIndex];
+        if (!parameter.areKeyframesSupported() || !parameter.isTimeVarying()) return null;
+        var keys = parameter.getKeys();
+        if (!keys || keys.length < 2 || keys.length > 10000) return null;
+        keys.sort(function (first, last) { return first.seconds - last.seconds; });
+        var id = ZMotionJson.stringify([state.identity, componentIndex, parameterIndex]);
+        var reference = preferred && preferred.id === id ? preferred : ZMotionRanges[id];
+        var pair = findPair(keys, state.sourceCursor, reference);
+        if (!pair) return null;
+        var first = parameter.getValueAtKey(pair[0]);
+        var last = parameter.getValueAtKey(pair[1]);
+        if (!numeric(first) || !numeric(last) || typeof first !== typeof last) return null;
+        var valueKind = kind(component, parameterIndex, first);
+        var target = {
+            id: id, label: String(component.displayName || component.matchName) + ' / ' + String(parameter.displayName), kind: valueKind,
+            startTicks: String(pair[0].ticks), endTicks: String(pair[1].ticks), frameTicks: state.frameTicks,
+            startValue: first, endValue: last,
+            rangeToken: rangeToken(state, componentIndex, parameterIndex, parameter, keys, pair)
+        };
+        if (valueKind === 'opacity') target.limits = [0, 100];
+        return { target: target, parameter: parameter, keys: keys };
+    }
+    function collect(state, preferred) {
+        var candidates = [];
+        if (!state.sequence) return candidates;
+        var componentIndex;
+        var parameterIndex;
+        for (componentIndex = 0; componentIndex < state.clip.components.numItems; componentIndex++) {
+            var properties = state.clip.components[componentIndex].properties;
+            for (parameterIndex = 0; parameterIndex < properties.numItems; parameterIndex++) {
+                try {
+                    var entry = describeTarget(state, componentIndex, parameterIndex, preferred);
+                    if (entry) candidates.push(entry);
+                } catch (error) { continue; }
             }
         }
-        if (collisions && !recipe.replaceExisting) fail('"' + clip.name + '" has existing keyframes in this range. Enable replacement or choose another range.');
-        var values = [];
-        for (index = 0; index < samples.length; index++) values.push({ time: time(clip.inPoint.seconds + (first + index) * frame), value: animatedValue(base, samples[index], recipe) });
-        return { parameter: parameter, start: start, end: end, collisions: collisions, values: values };
+        return candidates;
     }
-
-    function animate(payload) {
-        var recipe = validatePlan(payload);
-        var state = mutationContext(payload);
-        var plans = [];
+    function inspect(payload) {
+        var state = context();
+        var candidates = collect(state, payload.preferred);
+        var targets = [];
         var index;
-        var key;
+        for (index = 0; index < candidates.length; index++) targets.push(candidates[index].target);
+        return { hostVersion: String(app.version), targets: targets, message: targets.length ? '' : state.message };
+    }
+    function interpolate(first, last, progress) {
+        if (typeof first === 'number') return first + (last - first) * progress;
+        return [first[0] + (last[0] - first[0]) * progress, first[1] + (last[1] - first[1]) * progress];
+    }
+    function validatePlan(target, plan) {
+        if (!plan || !isArray(plan.curve) || plan.curve.length !== 4 || !isArray(plan.samples)) fail('Invalid curve plan.');
+        var index;
+        for (index = 0; index < 4; index++) {
+            var coordinate = plan.curve[index];
+            if (typeof coordinate !== 'number' || !isFinite(coordinate) || coordinate < (index % 2 ? -2 : 0) || coordinate > (index % 2 ? 3 : 1)) fail('Invalid curve coordinate.');
+        }
+        var frames = (Number(target.endTicks) - Number(target.startTicks)) / Number(target.frameTicks);
+        if (Math.abs(frames - Math.round(frames)) > 0.000001 || frames < 2 || frames > 1800 || plan.samples.length !== Math.round(frames) + 1) fail('Choose frame-aligned keyframes between 2 and 1800 frames apart.');
+        var samples = plan.samples;
+        if (samples[0].timeTicks !== target.startTicks || samples[samples.length - 1].timeTicks !== target.endTicks || samples[0].progress !== 0 || samples[samples.length - 1].progress !== 1) fail('The curve must preserve both endpoint times.');
+        for (index = 0; index < samples.length; index++) {
+            var sample = samples[index];
+            time(sample.timeTicks);
+            if (Math.abs(Number(sample.timeTicks) - Number(target.startTicks) - index * Number(target.frameTicks)) > 8) fail('Generated keys must follow the sequence frame grid.');
+            if (typeof sample.progress !== 'number' || !isFinite(sample.progress) || sample.progress < -2 || sample.progress > 3 || !numeric(sample.value) || !close(sample.value, interpolate(target.startValue, target.endValue, sample.progress))) fail('The generated values do not match the endpoint values.');
+            if (target.limits && (sample.value < target.limits[0] || sample.value > target.limits[1])) fail('The curve exceeds the property range. Reduce overshoot.');
+        }
+    }
+    function applyCurve(payload) {
+        if (!payload.target || typeof payload.target.id !== 'string' || typeof payload.target.rangeToken !== 'string') fail('Load a keyframe pair before applying a curve.');
+        var state = context();
+        var candidates = collect(state, payload.target);
+        var candidate = null;
+        var index;
+        for (index = 0; index < candidates.length; index++) if (candidates[index].target.id === payload.target.id) candidate = candidates[index];
+        if (!candidate || candidate.target.rangeToken !== payload.target.rangeToken) fail('The keyframes or clip selection changed after the preview. Return to the panel to reload the pair.');
+        var target = candidate.target;
+        var parameter = candidate.parameter;
+        validatePlan(target, payload.plan);
+        var samples = payload.plan.samples;
+        var expectedTimes = {};
+        var existingTimes = {};
+        for (index = 0; index < candidate.keys.length; index++) existingTimes[String(candidate.keys[index].ticks)] = true;
+        for (index = 1; index < samples.length - 1; index++) expectedTimes[samples[index].timeTicks] = true;
         var writes = 0;
-        var complete = 0;
-        for (index = 0; index < state.clips.length; index++) plans.push(prepareAnimation(state.clips[index], recipe, payload.samples, state.secondsPerFrame, index));
         try {
-            for (index = 0; index < plans.length; index++) {
-                var plan = plans[index];
-                successful(plan.parameter.setTimeVarying(true), 'animation mode');
-                if (plan.collisions) successful(plan.parameter.removeKeyRange(plan.start, plan.end, true), 'keyframe replacement');
-                for (key = 0; key < plan.values.length; key++) {
-                    successful(plan.parameter.addKey(plan.values[key].time), 'keyframe creation');
-                    successful(plan.parameter.setValueAtKey(plan.values[key].time, plan.values[key].value, key === plan.values.length - 1), 'keyframe value');
-                    successful(plan.parameter.setInterpolationTypeAtKey(plan.values[key].time, 0, key === plan.values.length - 1), 'linear interpolation');
-                    writes++;
-                }
-                complete++;
+            for (index = 0; index < candidate.keys.length; index++) {
+                var existing = candidate.keys[index];
+                if (existing.seconds > time(target.startTicks).seconds && existing.seconds < time(target.endTicks).seconds && !Object.prototype.hasOwnProperty.call(expectedTimes, String(existing.ticks))) successful(parameter.removeKey(existing), 'intermediate key removal');
             }
+            for (index = 1; index < samples.length - 1; index++) {
+                var keyTime = time(samples[index].timeTicks);
+                if (!Object.prototype.hasOwnProperty.call(existingTimes, samples[index].timeTicks)) successful(parameter.addKey(keyTime), 'intermediate key creation');
+                successful(parameter.setValueAtKey(keyTime, samples[index].value, index === samples.length - 2), 'intermediate key value');
+                if (!close(parameter.getValueAtKey(keyTime), samples[index].value)) fail('Premiere changed a generated value instead of preserving the preview.');
+                writes++;
+            }
+            for (index = 0; index < samples.length; index++) successful(parameter.setInterpolationTypeAtKey(time(samples[index].timeTicks), 0, index === samples.length - 1), 'linear interpolation');
+            if (!close(parameter.getValueAtKey(time(target.startTicks)), target.startValue) || !close(parameter.getValueAtKey(time(target.endTicks)), target.endValue)) fail('Premiere changed an endpoint value.');
         } catch (error) {
-            fail(String(error.message || error) + ' ' + complete + ' clips completed; the current clip may be partially changed. Use Premiere Undo to restore changes before retrying.');
+            fail(String(error.message || error) + ' Some intermediate keys may have changed. Use Premiere Undo before retrying.');
         }
-        return { affectedClips: complete, keyframesWritten: writes, message: 'Applied animation to ' + complete + ' video clip' + (complete === 1 ? '.' : 's.') };
+        ZMotionRanges[target.id] = { startTicks: target.startTicks, endTicks: target.endTicks };
+        var refreshed = inspect({ preferred: target });
+        var updated = target;
+        for (index = 0; index < refreshed.targets.length; index++) if (refreshed.targets[index].id === target.id) updated = refreshed.targets[index];
+        return { keyframesWritten: writes, message: 'Curve applied. Both endpoint values and times were preserved.', target: updated };
     }
-
-    function transform(payload) {
-        var state = mutationContext(payload);
-        var change = payload.change;
-        if (!change || !/^(position|scale|rotation|opacity)$/.test(change.property)) fail('Unknown transform property.');
-        validateValue(change.value, change.property);
-        if (change.property === 'position') {
-            number(change.value[0], -4, 5, 'horizontal position');
-            number(change.value[1], -4, 5, 'vertical position');
-        } else if (change.property === 'opacity') number(change.value, 0, 100, 'opacity');
-        else if (change.property === 'scale') number(change.value, 0.1, 1000, 'scale');
-        else number(change.value, -3600, 3600, 'rotation');
-        var parameters = [];
-        var index;
-        for (index = 0; index < state.clips.length; index++) {
-            var parameter = getParameter(state.clips[index], change.property);
-            validateValue(parameter.getValue(), change.property);
-            if (parameter.isTimeVarying()) fail('The selected ' + change.property + ' property is animated. Static adjustments would replace animation.');
-            parameters.push(parameter);
-        }
-        try {
-            for (index = 0; index < parameters.length; index++) successful(parameters[index].setValue(change.value, true), 'transform value');
-        } catch (error) {
-            fail(String(error.message || error) + ' Some clips may have changed. Use Premiere Undo before retrying.');
-        }
-        return { affectedClips: parameters.length, keyframesWritten: 0, message: 'Updated ' + change.property + ' on ' + parameters.length + ' video clip' + (parameters.length === 1 ? '.' : 's.') };
-    }
-
     function dispatch(input) {
         try {
             var request = ZMotionJson.parse(input);
-            if (!request || request.protocol !== 1 || !request.payload || typeof request.payload !== 'object') fail('Unsupported Z Motion request.');
+            if (!request || request.protocol !== 2 || !request.payload || typeof request.payload !== 'object') fail('Unsupported Z Motion request. Reinstall the current panel.');
             var result;
-            if (request.operation === 'inspect') result = inspect();
-            else if (request.operation === 'animate') result = animate(request.payload);
-            else if (request.operation === 'transform') result = transform(request.payload);
+            if (request.operation === 'inspect') result = inspect(request.payload);
+            else if (request.operation === 'apply-curve') result = applyCurve(request.payload);
             else fail('Unknown Z Motion operation.');
-            return ZMotionJson.stringify({ protocol: 1, ok: true, data: result });
+            return ZMotionJson.stringify({ protocol: 2, ok: true, data: result });
         } catch (error) {
-            return ZMotionJson.stringify({ protocol: 1, ok: false, error: String(error.message || error) });
+            return ZMotionJson.stringify({ protocol: 2, ok: false, error: String(error.message || error) });
         }
     }
-
     return { dispatch: dispatch };
 }());

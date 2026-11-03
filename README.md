@@ -1,51 +1,56 @@
 # Z Motion
 
-An original motion toolkit for Adobe Premiere Pro 2026 on Windows. Built with React, TypeScript and Vite, packaged as a local CEP 12 panel.
+Version 1 is an easing curve editor for existing Adobe Premiere Pro 2026 keyframes. The panel contains a graph, a motion preview and one **Apply Animation** action.
 
-## Install
+## Workflow
+
+1. Select one video clip that already has animated properties in Effect Controls.
+2. Place the playhead between the two keyframes you want to smooth.
+3. Move the pointer into Z Motion or focus a graph control. The eligible pair loads automatically. If more than one property is animated at that time, choose the property in the small selector.
+4. Adjust the curve using its handles, arrow keys, coordinates or curve shortcuts. Review the preview.
+5. Click **Apply Animation**. The plugin preserves both endpoint values and times and writes the intermediate sequence-frame values.
+
+Premiere's public API does not expose which keyframes are highlighted in Effect Controls. The playhead-based workflow above was explicitly approved for v1. Do not treat the highlighted diamonds as a selection that the extension can read. See the [design decision](docs/decisions/curve-only-v1.md).
+
+The first Adobe query waits until you enter the editor, so opening the panel does not query a project during Premiere startup.
+
+The preview animates the Z marker using the same numeric samples that are sent to Premiere. Its duration comes from the existing keyframes. It illustrates the parameter's timing and relative movement; it is not a rendered video preview. Native equality is checked at sampled frames. Subframe rendering and motion blur are outside that guarantee.
+
+## Install on Windows
 
 1. Close Premiere Pro.
-2. Run `release/z-motion-0.1.0-setup.exe` and choose **Install Z Motion**.
-3. Open Premiere Pro 2026, open a project and sequence, then choose **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
-4. Select video clips in the timeline and click **Refresh** in Z Motion.
+2. Run `release/z-motion-1.0.0-setup.exe` and choose **Install Z Motion**.
+3. Open Premiere Pro 2026, then **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
 
-The installer includes the compiled panel, host script, logo and Argentum Sans fonts. Node.js, npm, After Effects and a separate font installation are not required on the editing machine. Adobe Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are supplied with supported Windows installations.
+The installer includes the compiled panel, host script, original Z icon, Argentum Sans fonts and documentation. No Node.js, npm, After Effects or separate font installation is required on the editing machine. Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are used by setup.
 
-The EXE is a local, unsigned build, not an Adobe Marketplace package. Its installation screen explains the required per-user `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1` setting. This enables unsigned CEP extensions for that Windows user. No machine-wide execution policy is changed. Previous settings are recorded in the installation metadata.
+This is a local unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for local unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
 
-The ZIP is an alternative: extract it fully and run `install-z-motion.cmd`. A custom Premiere location can be supplied to the PowerShell installer:
+Alternatively, extract `z-motion-1.0.0-windows.zip` completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -EnableUnsigned -PremierePath 'D:\Adobe\Adobe Premiere Pro 2026'
 ```
 
-Installation target: `%APPDATA%\Adobe\CEP\extensions\com.zielis.z-motion`. Run `uninstall-z-motion.cmd` in that folder to uninstall. The uninstaller preserves other extensions and local preset data. The shared Adobe developer setting is retained by default; run the PowerShell uninstaller with `-RestoreDeveloperSetting` if you explicitly want to restore its pre-install value and do not need it for other local extensions.
+The destination is `%APPDATA%\Adobe\CEP\extensions\com.zielis.z-motion`. The installed folder contains `uninstall-z-motion.cmd`. Uninstallation preserves other extensions and legacy local preset data. The shared Adobe developer setting is retained by default; the PowerShell uninstaller accepts `-RestoreDeveloperSetting` when explicitly requested.
 
-## Use
+## Supported ranges
 
-- **Curves:** drag either Bezier handle, use the arrow keys on a focused handle, enter coordinates or choose a curve preset.
-- **Movement:** fade, four slide directions, zoom or rotation. Choose entrance or exit, frame duration, amount and optional stagger. For exits, slide labels describe the edge the clip moves toward.
-- **Apply animation:** writes frame-aligned, editable linear keyframes on the native Motion or Opacity property. The curve is baked into the samples rather than stored as After Effects temporal influence handles.
-- **Transform:** set position, uniform scale, rotation or opacity on selected clips. Position uses percentages of the sequence frame; it does not relocate the clip's anchor point.
-- **Presets:** save named recipes locally, load the starter recipes and import/export versioned Z Motion JSON files. Replacement consent is never saved in a preset.
+- One selected video clip, forward playback at 100% speed.
+- Existing numeric or two-dimensional keyframes on a readable, keyframe-capable component parameter.
+- Frame-aligned endpoint keys 2–1800 sequence frames apart.
+- Both original endpoint values and times remain fixed. Their interpolation is made linear together with the internal samples to represent the baked curve.
+- Reapplying in the same Premiere scripting session retains the original pair while the playhead stays inside it. Generated keys are updated without treating them as new endpoints. Restarting Premiere clears this remembered interval.
+- Keys outside the chosen interval retain their values and times. Changing endpoint interpolation can affect interpolation into neighboring segments; CEP does not expose enough tangent metadata to preserve that exactly.
+- Opacity bounds are checked before applying. If another property rejects or clamps a sample, the host reports failure rather than claiming it reproduced the preview.
 
-An entrance begins at the clip's in point. An exit finishes on its last visible frame. Duration is the number of sampled frames, including both endpoints. Stagger offsets the animation inside each selected clip; it does not move clips on the timeline. Clips are ordered by timeline start, then stable clip ID.
+The host revalidates the keyframe snapshot before writing. Changed keyframes, trim, property layout or clip selection cause a refusal. CEP edits are not atomic: a native failure can leave partial changes and require multiple Premiere Undo steps. Projects are never saved automatically.
 
-The host validates the whole selection before mutation. Keyframe collisions are rejected unless **Replace keys in this range** is enabled. Existing key objects outside that range are retained; adding new keys can affect interpolation between neighboring keys. Static transforms refuse animated properties. Premiere's CEP API does not provide an atomic batch transaction: if Adobe rejects a write, the panel reports partial progress and directs you to Premiere Undo. An operation is not guaranteed to be a single Undo step. The panel never saves your project automatically.
+Browser preview mode edits the graph and previews timing. **Apply Animation** is disabled outside Premiere and when there is no unambiguous valid pair.
 
-## Current boundaries
+## Develop and test
 
-- Targets Premiere 26.x / CEP 12. Other host versions are not declared supported.
-- Animations require forward clips at 100% speed. Retimed/reversed clips are rejected.
-- Supports standard video clips with native Motion/Opacity parameters. Uniform Scale must be enabled for scale operations. Audio selections are ignored.
-- Up to 50 selected clips, 2–300 duration frames and 0–120 stagger frames per operation.
-- Preview mode in a browser cannot edit Premiere. It never fabricates a successful timeline edit.
-- AE expressions, parenting, rigging, physics, `.ffx` imports, shape generation and a text animation engine are outside this release's approved scope.
-- Host contract tests use an Adobe API fixture. They do not replace validation in the installed Premiere application. See the [implementation report](docs/implementation-report.md) for the exact validation status.
-
-## Develop and verify
-
-Use Node.js 24 LTS or a supported version >=22.12.
+Use Node.js 24 LTS, then:
 
 ```sh
 npm ci
@@ -56,43 +61,35 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Windows packaging and installation tests:
+Windows installation verification and packaging:
 
 ```sh
-npm run build
 npm run test:installer
 npm run package:windows
 ```
 
-The Windows package command uses the .NET Framework C# compiler already present on Windows. It produces the EXE, portable ZIP and `sha256sums.txt` under `release`. SHA-256 inventories detect payload corruption; they are not publisher signatures.
+Build before packaging. The package command produces the EXE, portable ZIP and SHA-256 checksums under `release` using the Windows .NET Framework C# compiler. The EXE accepts `/sandbox <absolute-directory>` for isolated tests without registry changes or Adobe prerequisites. Integrity inventories detect file corruption; they are not publisher signatures.
 
-The EXE also accepts `/sandbox <absolute-directory>` for automated installation tests without registry changes or an Adobe prerequisite. Do not use that mode for a real installation.
+The build targets Chromium 99, emits an IIFE with local relative assets and packages the CEP 12 manifest. It does not enable CEP Node integration, disable web security, start a runtime server or open a debug port.
 
-`npm run build` type-checks the project, builds a Chromium 99 IIFE bundle with relative assets and creates the CEP package in `dist`. No Node integration, disabled web security flag, remote server, runtime network access or debug port is enabled by the extension. Use `npm run dev` for the browser preview; use a packaged install to test Premiere. Restart the panel after rebuilding and reinstalling.
+## Architecture and continuation
 
-## Architecture
-
-| Directory | Responsibility |
+| Location | Responsibility |
 | --- | --- |
-| `src/domain` | Curve math, recipe validation, frame sampling |
-| `src/application` | Host port and editing use cases |
-| `src/infrastructure` | CEP transport and versioned local preset storage |
-| `src/presentation` | React editing controls |
-| `host` | ES3-compatible JSON codec and Premiere adapter |
-| `cep` | Adobe extension manifest |
-| `installer` | Windows install/uninstall scripts and setup UI |
-| `scripts` | Packaging and isolated installer verification |
-| `tests` | Adobe contract fixtures and real-browser flows |
-| `docs` | Audit, design decisions, validation and handoff |
+| `src/domain/easing-curve.ts` | Curve validation, Bezier inversion, precise frame times and value sampling |
+| `src/application` | Host port and curve use cases |
+| `src/infrastructure/cep-host.ts` | Version 2 CEP request/response transport |
+| `src/presentation` | Graph interaction and sample-based motion preview |
+| `host` | ES3 JSON codec, pair discovery, snapshot validation and native writes |
+| `installer`, `scripts` | Installation, packaging and isolated verification |
+| `tests` | Adobe API fixture and real-browser user flows |
 
-New source filenames use kebab-case. Standard tool filenames such as `README.md`, `DESIGN.md` and `CSXS/manifest.xml` retain their required conventions. Supplied upstream font files retain their original names; bundled copies use kebab-case. Code contains no explanatory comments; decisions are documented here and in `docs`.
+The GitHub Actions workflow checks Linux and Windows, produces browser evidence and builds Windows installer artifacts. It activates when these files are pushed to a GitHub repository. No GitHub run is claimed without run evidence.
 
-## Continuous integration
+Read the [current implementation report](docs/implementation-report.md), [v1 decision](docs/decisions/curve-only-v1.md), [initial audit](docs/project-audit.md) and [archived toolkit prototype report](docs/history/toolkit-prototype-report.md) before continuing. Transform tools, movement recipes and the preset library were removed from the active product at the user's request. The archived reports retain the earlier work and rationale for future development.
 
-`.github/workflows/ci.yml` runs lint, tests, coverage, production builds and browser tests on Linux and Windows. Windows also validates installation and produces installer artifacts. It runs on pushes, pull requests and manual dispatch with read-only repository permissions. No credentials, Adobe license or publishing secrets are required. The workflow becomes active after these files are pushed to a GitHub repository.
+New source files use kebab-case, code and documentation are in English, and explanatory decisions live in documentation rather than code comments. Standard tool filenames retain their required spelling.
 
 ## Provenance
 
-The provided Motion 4.3.0 distribution was used as a read-only architectural reference. No Motion source code, binaries, presets or artwork are redistributed. Z Motion is an independent implementation, unaffiliated with Mt. Mograph or Adobe. The supplied Z Motion logo is used as requested. Argentum Sans is bundled under the SIL Open Font License; React, React DOM and Scheduler notices are included in `dist/licenses`.
-
-Read the [project audit](docs/project-audit.md), [implementation plan](docs/implementation-plan.md) and [implementation report](docs/implementation-report.md) before continuing this project.
+Z Motion is an independent implementation. The supplied Motion 4.3.0 distribution was inspected read-only; none of its code, binaries, presets or artwork is redistributed. The supplied Z Motion icon is used as requested. Argentum Sans is bundled under the SIL Open Font License, and runtime dependency notices are included in `dist/licenses`.
