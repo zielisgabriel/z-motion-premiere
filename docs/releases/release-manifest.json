@@ -84,7 +84,9 @@
           "size": 424744,
           "sha256": "8e51f36b3b3e29ee6c5b6ad83b81b25f809918524e6d4a47f75ab057da91be97"
         }
-      ]
+      ],
+      "sourceCommit": "77e05e61966167e6201f43ae585f73520686382d"
     }
-  ]
+  ],
+  "publishedDate": "2026-11-03"
 }

@@ -90,7 +90,7 @@ The build targets Chromium 99, emits an IIFE with local relative assets and pack
 | `installer`, `scripts` | Installation, packaging and isolated verification |
 | `tests` | Adobe API fixture and real-browser user flows |
 
-The GitHub Actions workflow checks Linux and Windows, produces browser evidence and builds Windows installer artifacts. It runs on main pushes, pull requests and manual dispatch. Actual remote run outcomes are recorded in the publication report.
+The GitHub Actions workflow checks Linux and Windows, produces browser evidence and builds Windows installer artifacts. It runs for source/configuration changes pushed to main, pull requests and manual dispatch. Documentation-only main pushes and tag pushes skip redundant builds. Actual remote run outcomes are recorded in the publication report.
 
 Read the [current implementation report](docs/implementation-report.md), [v1 decision](docs/decisions/curve-only-v1.md), [initial audit](docs/project-audit.md) and [archived toolkit prototype report](docs/history/toolkit-prototype-report.md) before continuing. Transform tools, movement recipes and the preset library were removed from the active product at the user's request. The archived reports retain the earlier work and rationale for future development.
 

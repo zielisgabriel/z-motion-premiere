@@ -35,7 +35,7 @@ The user also explicitly accepted automatic discovery of the pair surrounding th
 | Measured unit coverage | Previous 1.0.0 measurement: 85.59% lines, 83.82% branches; not remeasured for this host-only fix, whose JSX tests are separate |
 | Live Premiere keyframe application | User confirmed Position works in 1.0.1; Scale readback failed there and native Scale validation of 1.0.2 remains pending |
 | Current Windows EXE and ZIP | 1.0.2 generated; EXE sandbox install passed and installed host/UI SHA-256 hashes matched the production build |
-| GitHub-hosted CI | Not run: no configured repository/remote in the initial workspace |
+| GitHub-hosted CI | Passed on Linux and Windows: [run 41578086137](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/41578086137) |
 
 Tests of the host use an explicit Adobe API fixture, not a live Premiere engine. Browser agreement tests capture actual Web Animations frames and compare their normalized progression with the sample values sent through the simulated CEP boundary. These do not certify native rendering.
 
@@ -117,3 +117,7 @@ The 1.0.2 setup EXE passed an isolated installation. Its installed manifest repo
 ## Git/GitHub publication preparation: 2026-11-03
 
 The user requested English Conventional Commits, a GitHub repository and releases for all four generated versions. Original binaries are preserved with version-specific SHA-256 files. Earlier tags recover their compiled packages honestly; current source is retained on main and v1.0.2. See [publication report](git-and-release-report.md), [release provenance](release-history.md) and [changelog](../changelog.md) for the final publication and CI status. The product version and native validation limits are unchanged.
+
+## GitHub publication completed: 2026-11-03
+
+The [private repository](https://github.com/zielisgabriel/z-motion-premiere) now contains English Conventional Commits, four annotated release tags, complete maintained 1.0.2 source and accurately labeled historical package snapshots. All four releases are published with original installers, ZIPs and checksums. GitHub asset sizes and SHA-256 digests matched all 12 originals. Version 0.1.0 is a prerelease; 1.0.2 is Latest. [CI](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/41578086137) passed on Linux and Windows, including coverage, browser checks and Windows installer verification. See [the publication report](git-and-release-report.md) and [remote verification](releases/publication-verification.json). Native Scale validation remains pending and is not implied by publication.

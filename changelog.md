@@ -1,6 +1,6 @@
 # Changelog
 
-Original builds were created on 2026-11-02. Git history and GitHub publication were prepared on 2026-11-03. Earlier tags recover packaged runtime snapshots; they do not claim to restore missing TypeScript source history. See [release provenance](docs/release-history.md).
+Original builds were created on 2026-11-02. Git history and GitHub publication were completed on 2026-11-03. Earlier tags recover packaged runtime snapshots; they do not claim to restore missing TypeScript source history. See [release provenance](docs/release-history.md).
 
 ## [1.0.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.0.2)
 

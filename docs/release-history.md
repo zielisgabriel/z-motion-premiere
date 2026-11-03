@@ -1,6 +1,6 @@
 # Release history and provenance
 
-Publication prepared on 2026-11-03 for [zielisgabriel/z-motion-premiere](https://github.com/zielisgabriel/z-motion-premiere), initially private. The workspace had no Git repository before this task. Git author identity comes from the user's existing Git configuration. Commits use Conventional Commits in English: type(scope): imperative description.
+Published on 2026-11-03 for [zielisgabriel/z-motion-premiere](https://github.com/zielisgabriel/z-motion-premiere), initially private. The workspace had no Git repository before this task. Git author identity comes from the user's existing Git configuration. Commits use Conventional Commits in English: type(scope): imperative description.
 
 ## Version snapshots
 
@@ -21,6 +21,6 @@ Each release attaches the original EXE, original portable ZIP and a version-spec
 
 ## Verification and CI
 
-Historical ZIP manifest versions are checked against their versioned filenames. Recovered Git blobs are compared with their original package files. The maintained source uses the existing local checks and GitHub Actions on main pushes, pull requests and manual dispatch. Tag pushes do not trigger duplicate jobs or try to build missing historical source trees. Publication and actual CI results are recorded in [git-and-release-report.md](git-and-release-report.md).
+Historical ZIP manifest versions are checked against their versioned filenames. Recovered Git blobs are compared with their original package files. The maintained source uses the existing local checks and GitHub Actions on source/configuration changes pushed to main, pull requests and manual dispatch. Documentation-only main pushes are excluded. Tag pushes do not trigger duplicate jobs or try to build missing historical source trees. Publication and actual CI results are recorded in [git-and-release-report.md](git-and-release-report.md).
 
 Generated output, local installation sandboxes, dependencies, local agent settings and environment credentials are excluded from the main source commit. Third-party font/runtime license notices remain included with the original bundles. No project license is invented or added during publication.
