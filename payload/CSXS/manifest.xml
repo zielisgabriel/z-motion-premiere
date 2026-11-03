@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.zielis.z-motion" ExtensionBundleName="Z Motion" ExtensionBundleVersion="0.1.0">
+  <ExtensionList><Extension Id="com.zielis.z-motion.panel" Version="0.1.0" /></ExtensionList>
+  <ExecutionEnvironment>
+    <HostList><Host Name="PPRO" Version="[26.0,26.99]" /></HostList>
+    <LocaleList><Locale Code="All" /></LocaleList>
+    <RequiredRuntimeList><RequiredRuntime Name="CSXS" Version="12.0" /></RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.zielis.z-motion.panel">
+      <DispatchInfo>
+        <Resources><MainPath>./index.html</MainPath><ScriptPath>./host/z-motion-host.jsx</ScriptPath></Resources>
+        <Lifecycle><AutoVisible>true</AutoVisible></Lifecycle>
+        <UI>
+          <Type>Panel</Type><Menu>Z Motion</Menu>
+          <Geometry><Size><Width>400</Width><Height>750</Height></Size><MinSize><Width>280</Width><Height>400</Height></MinSize></Geometry>
+          <Icons><Icon Type="Normal">./images/icon.png</Icon><Icon Type="DarkNormal">./images/icon.png</Icon></Icons>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>
