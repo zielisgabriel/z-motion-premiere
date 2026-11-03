@@ -18,4 +18,4 @@ Test curve/value math and exact tick times, the ES3 host boundary, protocol vali
 
 ## Handoff
 
-Rebuild the CEP package and Windows installers with version 1.0.0. Update `implementation-report.md` with exact test outcomes, installed version and remaining native validation. Keep the original audit and archive the earlier prototype report so future contributors can recover the scope history.
+Rebuild the CEP package and Windows installers with version 1.0.1. Update `implementation-report.md` with exact test outcomes, installed version and remaining native validation. Keep the original audit and archive the earlier prototype report so future contributors can recover the scope history.

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.zielis.z-motion" ExtensionBundleName="Z Motion" ExtensionBundleVersion="1.0.0">
-  <ExtensionList><Extension Id="com.zielis.z-motion.panel" Version="1.0.0" /></ExtensionList>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.zielis.z-motion" ExtensionBundleName="Z Motion" ExtensionBundleVersion="1.0.1">
+  <ExtensionList><Extension Id="com.zielis.z-motion.panel" Version="1.0.1" /></ExtensionList>
   <ExecutionEnvironment>
     <HostList><Host Name="PPRO" Version="[26.0,26.99]" /></HostList>
     <LocaleList><Locale Code="All" /></LocaleList>

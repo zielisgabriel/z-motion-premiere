@@ -1,6 +1,6 @@
 # Z Motion implementation report
 
-Date: 2026-11-02. Current version: 1.0.0, curve-only first release. Current workspace: `C:/Users/Gabriel/Desktop/z-motion-premiere`.
+Date: 2026-11-02. Current version: 1.0.1, curve-only first release with a native keyframe compatibility fix. Current workspace: `C:/Users/Gabriel/Desktop/z-motion-premiere`.
 
 ## Current user-approved objective
 
@@ -28,13 +28,13 @@ The user also explicitly accepted automatic discovery of the pair surrounding th
 | --- | --- |
 | TypeScript / production CEP build | Passed |
 | ESLint | Passed |
-| Domain, transport, React and Adobe fixture tests | 24 passed |
+| Domain, transport, React and Adobe fixture tests | 32 passed, including 16 host boundary cases | 
 | Browser tests | 7 passed |
 | Browser coverage | Direct file loading; 280/400/1100 px layout; handle dragging; preview/native sample equality; ambiguous target selection; host rejection |
 | Installer lifecycle | Passed: install, upgrade, uninstall, repeat uninstall, neighbor preservation, corrupt payload rejection and path traversal rejection |
-| Measured unit coverage | 85.59% lines, 83.82% branches in the current coverage output; JSX host tests are separate |
-| Live Premiere keyframe application | Panel rendering verified; keyframe application remains unverified after a native inspection timeout |
-| Current Windows EXE and ZIP | Generated at the new workspace; the EXE sandbox install was verified as 1.0.0 |
+| Measured unit coverage | Previous 1.0.0 measurement: 85.59% lines, 83.82% branches; not remeasured for this host-only fix, whose JSX tests are separate |
+| Live Premiere keyframe application | User reproduced a Transform / Position creation error in 1.0.0; native application of 1.0.1 remains pending |
+| Current Windows EXE and ZIP | 1.0.1 generated; isolated EXE installation passed and installed host/UI hashes matched the production build |
 | GitHub-hosted CI | Not run: no configured repository/remote in the initial workspace |
 
 Tests of the host use an explicit Adobe API fixture, not a live Premiere engine. Browser agreement tests capture actual Web Animations frames and compare their normalized progression with the sample values sent through the simulated CEP boundary. These do not certify native rendering.
@@ -68,7 +68,7 @@ Use `npm ci`, `npm run check`, `npm run test:coverage`, `npx playwright install 
 - Verify native scalar/2D parameter behavior in Premiere 26.x, including fractional frame rates and trimmed clips, before claiming live compatibility.
 - Keep code/documentation in English, new source filenames in kebab-case and implementation explanations in these documents.
 
-## Final native and relocation checkpoint
+## Historical 1.0.0 native and relocation checkpoint
 
 The 1.0.0 panel was installed at the user's Adobe CEP directory and visibly rendered inside Premiere Pro 2026. During initial inspection, Premiere showed Not Responding and the panel surfaced its request timeout. No Apply Animation action was invoked by the agent, and no native keyframe writes were verified. The source of that application hang is not established.
 
@@ -76,6 +76,22 @@ The first Adobe query is now deferred until the user enters or focuses the edito
 
 During the work, the user moved the project from D: to the Desktop. The new location was confirmed using the Codex project inventory and inspected before edits continued. Source, documents, history and existing release artifacts were present. No user edits were overwritten. A temporary continuity checkpoint and copy of the installed CEP payload were also saved under the chat's writable visualization directory.
 
-The installed 1.0.0 copy predates the final deferred-query change. Premiere was still running at the final process check, so the production extension was not overwritten while loaded. Close Premiere and run the final 1.0.0 setup EXE to install the regenerated payload. Native pair discovery and actual application should then be verified in a disposable project before treating runtime compatibility as confirmed.
+The installed 1.0.0 copy predates the final deferred-query change. Premiere was still running at the final process check, so the production extension was not overwritten while loaded. At that checkpoint, the next step was to close Premiere and run the 1.0.0 setup EXE to install the regenerated payload. Native pair discovery and actual application should then be verified in a disposable project before treating runtime compatibility as confirmed.
 
-Final artifacts: `release/z-motion-1.0.0-setup.exe`, `release/z-motion-1.0.0-windows.zip` and `release/sha256sums.txt`. The final installer includes the deferred-query payload and these current documents.
+Historical 1.0.0 artifacts: `release/z-motion-1.0.0-setup.exe`, `release/z-motion-1.0.0-windows.zip` and `release/sha256sums.txt`. The final installer includes the deferred-query payload and these current documents.
+
+## Current 1.0.1 error correction
+
+The user subsequently reproduced a real Apply Animation failure in Premiere 26.5.1 using Transform / Position on a cursor image. The target loaded successfully; creation was rejected by the panel. The old host accepted only zero/true mutation results and supplied Time objects exclusively. A void result could therefore cause a false rejection before checking the created key. Adobe's sample also uses numeric seconds for mutation calls.
+
+The corrected host prefers numeric seconds, verifies creation using getKeys and verifies written values with getValueAtKey. A verified Time-object fallback remains available. Newly introduced keys at an unintended time are removed without deleting pre-existing keys there. Reapplication remembers the working time representation, and endpoint/neighbor values and times are rechecked. Diagnostics now include the source time and native result. See [the detailed fix report](bug-fixes/transform-position-keyframes.md) for the reproduction, evidence and limits.
+
+The original implementation failed the new void-return and seconds-only Position regressions. The final automated checks passed: npm run check (ESLint, 32 tests, TypeScript and the production CEP build), seven browser tests and the installer lifecycle suite. The expanded host tests cover the screenshot's 30 fps, 15-frame 2D Overshoot case, along with no-op writes, Time-only compatibility and failed native creation.
+
+The panel footer, package/lock versions, CEP manifest and installation instructions are now 1.0.1. No dependencies were added. Existing CI continues to run the same checks on Linux and Windows; no remote CI run is claimed.
+
+Premiere was running and responsive when the installed extension was inspected. Its manifest was still 1.0.0. The loaded extension and the user's project were not overwritten or saved. Close Premiere before installing the new setup; restore the original two-key range if the failed attempt added keys, then retest playback and application in the native editor. Native success is not established by the fixture or by readback alone.
+
+Release targets: release/z-motion-1.0.1-setup.exe, release/z-motion-1.0.1-windows.zip and release/sha256sums.txt.
+
+The Windows 1.0.1 EXE was executed in an isolated installation directory. Installation succeeded, the installed manifest reported 1.0.1, and both the installed host script and UI bundle matched the production build by SHA-256. Release verification evidence is saved in release/verification-1.0.1.json. This test did not alter the running Adobe extension, registry or project.

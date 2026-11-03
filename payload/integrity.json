@@ -1,7 +1,7 @@
 {
   "product": "Z Motion",
   "id": "com.zielis.z-motion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "files": [
     {
       "path": "assets/argentum-sans-black-DdPl19Fw.ttf",
@@ -21,15 +21,15 @@
     },
     {
       "path": "assets/z-motion.js",
-      "sha256": "d218f2184f86e58f71f4923d9debbb8e4abd3c84859be26e14f4d3440f2c2a43"
+      "sha256": "cef0b1d3432d40876cb0e731ef62f4d6f720555b0803e8bce6d3ef21191d7e01"
     },
     {
       "path": "CSXS/manifest.xml",
-      "sha256": "0bf7da612f929ca93e7b6165b8f74bb7b2c145c287393754e528c900dfa70887"
+      "sha256": "af79e114eb89033bf5556b14fcc0d1aea01da8aa3d4fc9c887955adbc6bc19d5"
     },
     {
       "path": "host/z-motion-host.jsx",
-      "sha256": "72e4a364d7a640547e66988d994183bf1496b1a8117f2977ecb058074d6ea017"
+      "sha256": "762d22d8a10b41baca07f17d2b899c643ba4ea2953aa59d3bcd9b6cb956c362f"
     },
     {
       "path": "images/icon.png",

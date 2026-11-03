@@ -19,20 +19,24 @@ The preview animates the Z marker using the same numeric samples that are sent t
 ## Install on Windows
 
 1. Close Premiere Pro.
-2. Run `release/z-motion-1.0.0-setup.exe` and choose **Install Z Motion**.
+2. Run `release/z-motion-1.0.1-setup.exe` and choose **Install Z Motion**.
 3. Open Premiere Pro 2026, then **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
 
 The installer includes the compiled panel, host script, original Z icon, Argentum Sans fonts and documentation. No Node.js, npm, After Effects or separate font installation is required on the editing machine. Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are used by setup.
 
 This is a local unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for local unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
 
-Alternatively, extract `z-motion-1.0.0-windows.zip` completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
+Alternatively, extract `z-motion-1.0.1-windows.zip` completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -EnableUnsigned -PremierePath 'D:\Adobe\Adobe Premiere Pro 2026'
 ```
 
 The destination is `%APPDATA%\Adobe\CEP\extensions\com.zielis.z-motion`. The installed folder contains `uninstall-z-motion.cmd`. Uninstallation preserves other extensions and legacy local preset data. The shared Adobe developer setting is retained by default; the PowerShell uninstaller accepts `-RestoreDeveloperSetting` when explicitly requested.
+
+## Version 1.0.1
+
+This patch fixes premature key-creation rejection and native time-argument compatibility. It verifies that each generated key exists at the requested time and reads back the written value. See the [fix report](docs/bug-fixes/transform-position-keyframes.md). Restore the original two-key interval if a previous failed attempt added intermediate keys. Native playback still requires verification in Premiere.
 
 ## Supported ranges
 

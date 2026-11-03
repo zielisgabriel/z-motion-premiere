@@ -132,8 +132,65 @@ var ZMotion = (function () {
         result.ticks = ticks;
         return result;
     }
-    function successful(status, action) {
-        if (status !== 0 && status !== true) fail('Premiere rejected ' + action + '.');
+    function sameTime(first, second) {
+        var tolerance = Math.max(8, Math.abs(Number(second.ticks)) * 0.00000000000000023);
+        return String(first.ticks) === String(second.ticks) || Math.abs(Number(first.ticks) - Number(second.ticks)) <= tolerance;
+    }
+    function keyIn(keys, requested) {
+        var index;
+        if (!keys) return null;
+        for (index = 0; index < keys.length; index++) if (sameTime(keys[index], requested)) return keys[index];
+        return null;
+    }
+    function keyArgument(keyTime, mode) { return mode === 'seconds' ? keyTime.seconds : keyTime; }
+    function removeNativeKey(parameter, keyTime, mode) {
+        var modes = [mode, mode === 'seconds' ? 'time' : 'seconds'];
+        var index;
+        var lastResult;
+        for (index = 0; index < modes.length; index++) {
+            try { lastResult = parameter.removeKey(keyArgument(keyTime, modes[index])); }
+            catch (error) { lastResult = String(error.message || error); }
+            if (!keyIn(parameter.getKeys(), keyTime)) return;
+        }
+        fail('Premiere did not remove the intermediate keyframe at ' + keyTime.seconds + 's. Native result: ' + String(lastResult) + '.');
+    }
+    function ensureNativeKey(parameter, requested, mode) {
+        var before = parameter.getKeys();
+        var existing = keyIn(before, requested);
+        if (existing) return { time: existing, mode: mode };
+        var modes = [mode, mode === 'seconds' ? 'time' : 'seconds'];
+        var attempt;
+        var index;
+        var lastResult;
+        for (attempt = 0; attempt < modes.length; attempt++) {
+            try { lastResult = parameter.addKey(keyArgument(requested, modes[attempt])); }
+            catch (error) { lastResult = String(error.message || error); }
+            var after = parameter.getKeys();
+            if (after) {
+                for (index = 0; index < after.length; index++) {
+                    if (!keyIn(before, after[index]) && !sameTime(after[index], requested)) removeNativeKey(parameter, after[index], modes[attempt]);
+                }
+            }
+            var created = keyIn(parameter.getKeys(), requested);
+            if (created) return { time: created, mode: modes[attempt] };
+        }
+        fail('Premiere did not create the intermediate keyframe at ' + requested.seconds + 's. Native result: ' + String(lastResult) + '.');
+    }
+    function setNativeValue(parameter, keyTime, value, mode, updateUI) {
+        var result = parameter.setValueAtKey(keyArgument(keyTime, mode), value, updateUI);
+        if (!close(parameter.getValueAtKey(keyTime), value)) fail('Premiere did not preserve the generated value at ' + keyTime.seconds + 's. Native result: ' + String(result) + '.');
+    }
+    function setLinear(parameter, keyTime, mode, updateUI) {
+        var modes = [mode, mode === 'seconds' ? 'time' : 'seconds'];
+        var index;
+        var result;
+        for (index = 0; index < modes.length; index++) {
+            try {
+                result = parameter.setInterpolationTypeAtKey(keyArgument(keyTime, modes[index]), 0, updateUI);
+                if (result === undefined || result === 0 || result === true) return;
+            } catch (error) { result = String(error.message || error); }
+        }
+        fail('Premiere rejected linear interpolation at ' + keyTime.seconds + 's. Native result: ' + String(result) + '.');
     }
     function context() {
         var project = app.project;
@@ -274,28 +331,40 @@ var ZMotion = (function () {
         validatePlan(target, payload.plan);
         var samples = payload.plan.samples;
         var expectedTimes = {};
-        var existingTimes = {};
-        for (index = 0; index < candidate.keys.length; index++) existingTimes[String(candidate.keys[index].ticks)] = true;
+        var remembered = ZMotionRanges[target.id];
+        var writeMode = remembered && remembered.writeMode === 'time' ? 'time' : 'seconds';
+        var protectedKeys = [];
+        for (index = 0; index < candidate.keys.length; index++) {
+            var original = candidate.keys[index];
+            if (original.seconds <= time(target.startTicks).seconds || original.seconds >= time(target.endTicks).seconds) protectedKeys.push({ time: original, value: parameter.getValueAtKey(original) });
+        }
         for (index = 1; index < samples.length - 1; index++) expectedTimes[samples[index].timeTicks] = true;
         var writes = 0;
         try {
             for (index = 0; index < candidate.keys.length; index++) {
                 var existing = candidate.keys[index];
-                if (existing.seconds > time(target.startTicks).seconds && existing.seconds < time(target.endTicks).seconds && !Object.prototype.hasOwnProperty.call(expectedTimes, String(existing.ticks))) successful(parameter.removeKey(existing), 'intermediate key removal');
+                if (existing.seconds > time(target.startTicks).seconds && existing.seconds < time(target.endTicks).seconds && !Object.prototype.hasOwnProperty.call(expectedTimes, String(existing.ticks))) removeNativeKey(parameter, existing, writeMode);
             }
             for (index = 1; index < samples.length - 1; index++) {
-                var keyTime = time(samples[index].timeTicks);
-                if (!Object.prototype.hasOwnProperty.call(existingTimes, samples[index].timeTicks)) successful(parameter.addKey(keyTime), 'intermediate key creation');
-                successful(parameter.setValueAtKey(keyTime, samples[index].value, index === samples.length - 2), 'intermediate key value');
-                if (!close(parameter.getValueAtKey(keyTime), samples[index].value)) fail('Premiere changed a generated value instead of preserving the preview.');
+                var created = ensureNativeKey(parameter, time(samples[index].timeTicks), writeMode);
+                writeMode = created.mode;
+                setNativeValue(parameter, created.time, samples[index].value, writeMode, index === samples.length - 2);
                 writes++;
             }
-            for (index = 0; index < samples.length; index++) successful(parameter.setInterpolationTypeAtKey(time(samples[index].timeTicks), 0, index === samples.length - 1), 'linear interpolation');
-            if (!close(parameter.getValueAtKey(time(target.startTicks)), target.startValue) || !close(parameter.getValueAtKey(time(target.endTicks)), target.endValue)) fail('Premiere changed an endpoint value.');
+            var finalKeys = parameter.getKeys();
+            for (index = 0; index < samples.length; index++) {
+                var actual = keyIn(finalKeys, time(samples[index].timeTicks));
+                if (!actual || !close(parameter.getValueAtKey(actual), samples[index].value)) fail('Premiere did not retain the sampled keyframe at ' + time(samples[index].timeTicks).seconds + 's.');
+                setLinear(parameter, actual, writeMode, index === samples.length - 1);
+            }
+            for (index = 0; index < protectedKeys.length; index++) {
+                var preserved = keyIn(parameter.getKeys(), protectedKeys[index].time);
+                if (!preserved || !close(parameter.getValueAtKey(preserved), protectedKeys[index].value)) fail('Premiere changed an endpoint or a neighboring keyframe.');
+            }
         } catch (error) {
             fail(String(error.message || error) + ' Some intermediate keys may have changed. Use Premiere Undo before retrying.');
         }
-        ZMotionRanges[target.id] = { startTicks: target.startTicks, endTicks: target.endTicks };
+        ZMotionRanges[target.id] = { startTicks: target.startTicks, endTicks: target.endTicks, writeMode: writeMode };
         var refreshed = inspect({ preferred: target });
         var updated = target;
         for (index = 0; index < refreshed.targets.length; index++) if (refreshed.targets[index].id === target.id) updated = refreshed.targets[index];
