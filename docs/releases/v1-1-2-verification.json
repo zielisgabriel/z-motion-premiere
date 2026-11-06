@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-05",
+  "repository": "zielisgabriel/z-motion-premiere",
+  "visibility": "public",
+  "latest": "v1.1.2",
+  "sourceCommit": "36221b57e48ebabdae4ea6b214293693f8339011",
+  "release": {
+    "id": 435921762,
+    "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2",
+    "draft": false,
+    "prerelease": false,
+    "publishedAt": "2026-11-06T00:12:56Z",
+    "assets": [
+      {
+        "name": "z-motion-1.1.2-setup.exe",
+        "size": 459776,
+        "digest": "sha256:1ac9c0b6629e43f10019962f0418232b3f0792ea9708991e9fe6413749c68ea6",
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-setup.exe"
+      },
+      {
+        "name": "z-motion-1.1.2-sha256sums.txt",
+        "size": 186,
+        "digest": "sha256:fa19eda2f065828b0dd273debe0e2077ca8bd43f9b5407908383f714e768215f",
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-sha256sums.txt"
+      },
+      {
+        "name": "z-motion-1.1.2-windows.zip",
+        "size": 444362,
+        "digest": "sha256:deab14c920b9330997487e241672ba74382a30a127dd0724580e0ade62830f0e",
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-windows.zip"
+      }
+    ]
+  },
+  "ci": {
+    "id": 42134387871,
+    "url": "https://github.com/zielisgabriel/z-motion-premiere/actions/runs/42134387871",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "verify (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (windows-latest)",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "originalAssetsPreserved": true,
+  "uploadedHashesVerified": true
+}

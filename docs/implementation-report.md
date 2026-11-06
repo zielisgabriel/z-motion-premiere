@@ -8,6 +8,8 @@ Validation: ESLint, all 86 automated tests, TypeScript and the production CEP bu
 
 The EXE also passed isolated installation, with all 13 installed payload hashes matching the production build. The saved project was inspected read-only. Native UI automation could not initialize because its runtime reported missing kernel assets; the agent did not independently verify live application or rendering. The user subsequently approved the version and requested GitHub publication. Publication status is tracked in the [publication report](git-and-release-report.md).
 
+[Version 1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2) is published as Latest. [Remote CI](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/42134387871) passed on Linux and Windows for the tagged source commit `36221b57e48ebabdae4ea6b214293693f8339011`, including Windows installer verification. Original EXE/ZIP artifacts were preserved and their uploaded hashes verified.
+
 ## Historical checkpoint: 1.1.1
 
 Date: 2026-11-05. The user clarified that the requested feature is motion blur and requested restoration to the latest GitHub source. `origin/main` was fetched, the working tree was restored, and comparison with `bdfc512a99d3c12875cfabd9bb5e0854f751c25a` returned no differences before implementing this feature. The prior local movement-generation code and controls were removed.

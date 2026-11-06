@@ -94,6 +94,8 @@
       "prerelease": false,
       "snapshot": "maintained-source",
       "originalBuildDate": "2026-11-05",
+      "publishedDate": "2026-11-05",
+      "sourceCommit": "36221b57e48ebabdae4ea6b214293693f8339011",
       "checksums": "z-motion-1.1.2-sha256sums.txt",
       "artifacts": [
         {
@@ -109,5 +111,6 @@
       ]
     }
   ],
-  "publishedDate": "2026-11-03"
+  "publishedDate": "2026-11-03",
+  "updatedDate": "2026-11-05"
 }

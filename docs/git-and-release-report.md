@@ -1,5 +1,20 @@
 # Git and GitHub publication report
 
+## Version 1.1.2 — 2026-11-05
+
+The user approved the clip-wide motion blur version and explicitly requested publication. The repository was already public; visibility was preserved.
+
+- Pushed the complete maintained source as `36221b57e48ebabdae4ea6b214293693f8339011` with the Conventional Commit `feat: add clip-wide Transform motion blur`.
+- [GitHub Actions run 42134387871](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/42134387871) passed on ubuntu-latest and windows-latest. Both jobs passed lint, coverage, production packaging and 12 browser flows. Windows also passed installer lifecycle, installer compilation and isolated EXE installation.
+- Created and pushed the annotated `v1.1.2` tag on that exact tested source commit.
+- Published [Z Motion 1.1.2 — Clip-wide motion blur](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2) as the latest stable release, after verifying the draft's assets and tag.
+- Attached the unchanged, user-approved `z-motion-1.1.2-setup.exe`, `z-motion-1.1.2-windows.zip` and version-specific SHA-256 checksums. All three uploaded sizes and GitHub SHA-256 digests matched local files. The 13 runtime payload files also matched the validated build, and the packaged host matched current source.
+- The release notes document functionality, installation, automated validation and the agent's native-rendering verification limit. Local 1.1.0 and 1.1.1 builds were not published.
+
+[v1-1-2-verification.json](releases/v1-1-2-verification.json) records the published release, asset hashes, source commit and successful remote jobs. This documentation update follows the tested source commit; the version tag remains on that tested commit. The initial publication record below is historical.
+
+## Initial publication — 2026-11-03
+
 Date: 2026-11-03. Repository: [zielisgabriel/z-motion-premiere](https://github.com/zielisgabriel/z-motion-premiere). Product version: 1.0.2. Initial visibility: private.
 
 ## Requested work

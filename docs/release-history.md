@@ -1,6 +1,6 @@
 # Release history and provenance
 
-Published on 2026-11-03 for [zielisgabriel/z-motion-premiere](https://github.com/zielisgabriel/z-motion-premiere), initially private. The workspace had no Git repository before this task. Git author identity comes from the user's existing Git configuration. Commits use Conventional Commits in English: type(scope): imperative description.
+Initial publication on 2026-11-03 for [zielisgabriel/z-motion-premiere](https://github.com/zielisgabriel/z-motion-premiere), initially private. Version 1.1.2 was published on 2026-11-05. The workspace had no Git repository before the initial publication task. Git author identity comes from the user's existing Git configuration. Commits use Conventional Commits in English: type(scope): imperative description.
 
 ## Version snapshots
 
