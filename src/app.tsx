@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createCurveService } from "./application/curve-service";
+import { createMotionBlurService } from "./application/motion-blur-service";
 import type {
   CurveTarget,
   HostPort,
   HostSnapshot,
+  MotionBlurTarget,
 } from "./application/host-port";
 import {
   defaultCurve,
@@ -12,6 +14,7 @@ import {
 } from "./domain/easing-curve";
 import { CurveEditor } from "./presentation/curve-editor";
 import { MotionPreview } from "./presentation/motion-preview";
+import { MotionBlurControls } from "./presentation/motion-blur-controls";
 import brandIcon from "../public/images/icon.png";
 
 const previewRange: KeyframeRange = {
@@ -24,6 +27,10 @@ const previewRange: KeyframeRange = {
 
 export default function App({ host }: { host: HostPort }) {
   const service = useMemo(() => createCurveService(host), [host]);
+  const blurService = useMemo(() => createMotionBlurService(host), [host]);
+  const [blurTarget, setBlurTarget] = useState<MotionBlurTarget>();
+  const blurTargetRef = useRef<MotionBlurTarget | undefined>(undefined);
+  const [shutterAngle, setShutterAngle] = useState(180);
   const [curve, setCurve] = useState<Curve>(defaultCurve);
   const [snapshot, setSnapshot] = useState<HostSnapshot | null>(null);
   const [target, setTarget] = useState<CurveTarget>();
@@ -50,11 +57,22 @@ export default function App({ host }: { host: HostPort }) {
       targetRef.current = chosen;
       setTarget(chosen);
       setSnapshot(next);
+      const blurTargets = next.motionBlur?.targets ?? [];
+      const selectedBlur =
+        blurTargets.find(
+          (candidate) => candidate.id === blurTargetRef.current?.id,
+        ) ?? (blurTargets.length === 1 ? blurTargets[0] : undefined);
+      if (selectedBlur?.stateToken !== blurTargetRef.current?.stateToken)
+        setShutterAngle(selectedBlur?.shutterAngle || 180);
+      blurTargetRef.current = selectedBlur;
+      setBlurTarget(selectedBlur);
       setError("");
     } catch (failure) {
       if (mounted.current) {
         targetRef.current = undefined;
         setTarget(undefined);
+        blurTargetRef.current = undefined;
+        setBlurTarget(undefined);
         setError((failure as Error).message);
       }
     } finally {
@@ -134,6 +152,49 @@ export default function App({ host }: { host: HostPort }) {
     setMessage("");
   }
 
+  function chooseBlurTarget(id: string) {
+    const chosen = snapshot?.motionBlur?.targets.find(
+      (candidate) => candidate.id === id,
+    );
+    blurTargetRef.current = chosen;
+    setBlurTarget(chosen);
+    setShutterAngle(chosen?.shutterAngle || 180);
+    setMessage("");
+  }
+
+  async function applyBlur() {
+    if (!blurTarget || running.current) return;
+    running.current = true;
+    setPending(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await blurService.apply(blurTarget, shutterAngle);
+      if (!mounted.current) return;
+      blurTargetRef.current = result.target;
+      setBlurTarget(result.target);
+      setSnapshot((current) =>
+        current?.motionBlur
+          ? {
+              ...current,
+              motionBlur: {
+                ...current.motionBlur,
+                targets: current.motionBlur.targets.map((item) =>
+                  item.id === result.target.id ? result.target : item,
+                ),
+              },
+            }
+          : current,
+      );
+      setMessage(result.message);
+    } catch (failure) {
+      if (mounted.current) setError((failure as Error).message);
+    } finally {
+      running.current = false;
+      if (mounted.current) setPending(false);
+    }
+  }
+
   function changeCurve(next: Curve) {
     setCurve(next);
     setMessage("");
@@ -167,7 +228,9 @@ export default function App({ host }: { host: HostPort }) {
           </div>
         </div>
         <span className="connection">
-          <span className={`status-dot ${target ? "connected" : ""}`} />
+          <span
+            className={`status-dot ${target || blurTarget ? "connected" : ""}`}
+          />
           {host.available
             ? snapshot
               ? `Premiere ${snapshot.hostVersion}`
@@ -208,7 +271,21 @@ export default function App({ host }: { host: HostPort }) {
           </div>
           <CurveEditor curve={curve} onChange={changeCurve} />
           <MotionPreview plan={prepared.plan} kind={target?.kind ?? "value"} />
-          <p className="target-hint">{hint}</p>
+          <p className="target-hint">{target ? hint : `Curves: ${hint}`}</p>
+          <MotionBlurControls
+            snapshot={snapshot?.motionBlur}
+            target={blurTarget}
+            angle={shutterAngle}
+            pending={pending}
+            available={host.available}
+            onTargetChange={chooseBlurTarget}
+            onAngleChange={(next) => {
+              setShutterAngle(next);
+              setMessage("");
+            }}
+            onApply={() => void applyBlur()}
+            onRefresh={enter}
+          />
         </section>
       </main>
       <div className="apply-section">
@@ -232,7 +309,7 @@ export default function App({ host }: { host: HostPort }) {
           <span aria-hidden="true">↗</span>
         </button>
         <div className="footer-line">
-          <span>Z Motion / 1.0.2</span>
+          <span>Z Motion / 1.1.2</span>
           <span>Two keys. Your curve.</span>
         </div>
       </div>

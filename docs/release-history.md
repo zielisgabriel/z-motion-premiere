@@ -9,7 +9,8 @@ Published on 2026-11-03 for [zielisgabriel/z-motion-premiere](https://github.com
 | v0.1.0 | Toolkit prototype, prerelease | Original preserved ZIP, compiled CEP runtime and installer scripts |
 | v1.0.0 | Curve-only editor | Original preserved ZIP, compiled CEP runtime and installer scripts |
 | v1.0.1 | Native Position write compatibility | Original preserved ZIP, compiled CEP runtime and installer scripts |
-| v1.0.2 | Current maintained source with Scale precision handling | Complete current source, tests, installer source and CI |
+| v1.0.2 | Maintained source with Scale precision handling | Complete source, tests, installer source and CI |
+| v1.1.2 | Clip-wide Transform motion blur and modern Transform detection | Complete maintained source; original user-approved 1.1.2 EXE and ZIP |
 
 Historical snapshots are recovered as separate commits with their original files unchanged, plus .gitattributes and release-snapshot.md recovery metadata. They use binary-preserving Git attributes to keep payload integrity inventories valid. The older TypeScript source trees were not retained and are not reconstructed from compiled JavaScript. Commit/tag dates record recovery, not original development.
 
@@ -17,7 +18,9 @@ The current source replaces the packaged tree on main. Earlier runtime files rem
 
 ## Original assets
 
-Each release attaches the original EXE, original portable ZIP and a version-specific SHA-256 file. Existing binaries are not rebuilt or overwritten during publication. [release-manifest.json](releases/release-manifest.json) records filenames, byte lengths, hashes and the source type for all four versions.
+Each release attaches the original EXE, original portable ZIP and a version-specific SHA-256 file. Existing binaries are not rebuilt or overwritten during publication. [release-manifest.json](releases/release-manifest.json) records filenames, byte lengths, hashes and the source type for each version.
+
+Version 1.1.2, requested on 2026-11-05, follows the same original-artifact policy. Its runtime and installer assets are unchanged from the tested local build. Bundled documentation captures the pre-publication checkpoint; repository documentation and release notes include the later user approval and publication status. Local 1.1.0 and 1.1.1 builds are not published. The repository was already public when this release was requested; its visibility is preserved.
 
 ## Verification and CI
 

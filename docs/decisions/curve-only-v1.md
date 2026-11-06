@@ -2,6 +2,8 @@
 
 Status: accepted by the user on 2026-11-02. Supersedes the earlier toolkit prototype scope.
 
+Amendment, 2026-11-05: the user requested [Transform motion blur controls](transform-motion-blur.md). The existing curve workflow remains unchanged. The new independent blur action adjusts shutter settings and does not generate movement; the two-operation protocol description below is historical.
+
 ## Product boundary
 
 Version 1 edits easing between existing keyframes. The panel contains the curve editor, timing preview, a compact property choice when necessary, and one Apply Animation action. Transform and Presets navigation, the timeline selection summary, movement recipes, duration/amount/stagger inputs and preset storage are removed from the active application.

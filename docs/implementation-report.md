@@ -1,5 +1,27 @@
 # Z Motion implementation report
 
+## Current version: 1.1.2
+
+Date: 2026-11-05. Fixed the user's selected-clip motion blur failure: the existing Transform in their saved project uses `AE.ADBE Geometry2`, which 1.1.1 did not recognize. Both Transform versions are now recognized. Blur has a separate clip context, independent of curve keys, cursor access, speed and direction. The panel identifies the selected clip and adds Refresh clip plus the explicit Apply blur to clip label. See the [detection fix](bug-fixes/transform-motion-blur-detection.md).
+
+Validation: ESLint, all 86 automated tests, TypeScript and the production CEP build pass. All 12 browser flows pass, including clip identification/refresh, blur application with no curve pair, disabled curve application and unchanged animation commands. The 280/400/1100 px layouts pass; connected and narrow screenshots were inspected. The isolated installer lifecycle passes. Version 1.1.2 runtime packaging contains 13 files with integrity hashes.
+
+The EXE also passed isolated installation, with all 13 installed payload hashes matching the production build. The saved project was inspected read-only. Native UI automation could not initialize because its runtime reported missing kernel assets; the agent did not independently verify live application or rendering. The user subsequently approved the version and requested GitHub publication. Publication status is tracked in the [publication report](git-and-release-report.md).
+
+## Historical checkpoint: 1.1.1
+
+Date: 2026-11-05. The user clarified that the requested feature is motion blur and requested restoration to the latest GitHub source. `origin/main` was fetched, the working tree was restored, and comparison with `bdfc512a99d3c12875cfabd9bb5e0854f751c25a` returned no differences before implementing this feature. The prior local movement-generation code and controls were removed.
+
+The panel now includes an independent Motion blur section for an existing Transform effect. It offers a 0–360° shutter angle, Off/90°/180°/360° shortcuts and explicit effect selection when needed. Apply blur changes only the two static shutter controls; Apply animation retains its existing curve behavior. No current keyframe pair is required to set blur. Native Motion animation and movement within source footage are not converted. The timing marker does not render blur.
+
+Native discovery recognizes the Transform match name and validates supported shutter layouts, values and animation state. The host rejects stale effect snapshots and animated shutter settings. It checks readback, attempts to restore previous settings after a failed write and reports partial rollback failures. See the [motion blur decision](decisions/transform-motion-blur.md) for the protocol, localization and rendering boundaries.
+
+Validation: ESLint, TypeScript and the production CEP build pass. All 77 automated tests and all 12 browser flows pass. Browser checks cover 280/400/1100 px layouts, direct file loading, applying/off without a curve pair, multiple Transform selection and native errors, plus the original curve regressions. The isolated installer lifecycle passes. Browser evidence is in `artifacts/motion-blur-*.png`; the locally cached Chromium can be reused by setting `PLAYWRIGHT_BROWSERS_PATH` to `artifacts/playwright-browsers`.
+
+The corrected local distribution is version 1.1.1, distinguishing it from the superseded local 1.1.0 movement installer. There is no new GitHub commit, tag, release or remote CI result. Live Premiere motion blur application and rendered playback remain unverified. The 1.0.2 report below is a historical checkpoint.
+
+## Historical checkpoint: 1.0.2
+
 Date: 2026-11-02. Current version: 1.0.2, curve-only first release with native keyframe compatibility and scalar readback precision fixes. Current workspace: `C:/Users/Gabriel/Desktop/z-motion-premiere`.
 
 ## Current user-approved objective

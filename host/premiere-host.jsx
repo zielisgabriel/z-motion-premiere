@@ -86,25 +86,36 @@ var ZMotion = (function () {
         }
         fail('Premiere rejected linear interpolation at ' + keyTime.seconds + 's. Native result: ' + String(result) + '.');
     }
-    function context() {
+    function clipContext() {
         var project = app.project;
         var sequence = project && project.activeSequence;
-        if (!sequence) return { message: 'Open a sequence and select one clip with two existing keyframes.' };
+        if (!sequence) return { message: 'Open a sequence and select one video clip.' };
         var selection = sequence.getSelection();
         var clips = [];
         var index;
         for (index = 0; index < selection.length; index++) if (selection[index].mediaType === 'Video') clips.push(selection[index]);
-        if (clips.length !== 1) return { message: 'Select one video clip with keyframes in Effect Controls.' };
+        if (clips.length !== 1) return { message: 'Select one video clip in the timeline.' };
         var clip = clips[0];
+        return {
+            sequence: sequence, clip: clip,
+            identity: [String(project.documentID || project.path || ''), String(sequence.sequenceID), String(clip.nodeId)],
+            message: ''
+        };
+    }
+    function curveContext(selected) {
+        if (!selected.sequence) return selected;
+        var clip = selected.clip;
+        var sequence = selected.sequence;
         if (typeof clip.getSpeed !== 'function' || Math.abs(clip.getSpeed() - 1) > 0.000001 || (typeof clip.isSpeedReversed === 'function' && clip.isSpeedReversed())) return { message: 'Use a forward clip at 100% speed for this version.' };
         var sourceCursor = clip.inPoint.seconds + sequence.getPlayerPosition().seconds - clip.start.seconds;
         return {
             sequence: sequence, clip: clip, sourceCursor: sourceCursor,
             frameTicks: String(sequence.timebase),
-            identity: [String(project.documentID || project.path || ''), String(sequence.sequenceID), String(clip.nodeId)],
+            identity: selected.identity,
             message: 'Place the playhead between two existing keyframes.'
         };
     }
+    function context() { return curveContext(clipContext()); }
     function findPair(keys, cursor, preferred) {
         var index;
         var first = null;
@@ -182,12 +193,127 @@ var ZMotion = (function () {
         return candidates;
     }
     function inspect(payload) {
-        var state = context();
-        var candidates = collect(state, payload.preferred);
+        var selected = clipContext();
+        var candidates = [];
+        var message = selected.message;
+        try {
+            var state = curveContext(selected);
+            candidates = collect(state, payload.preferred);
+            message = state.message;
+        } catch (error) { message = String(error.message || error); }
         var targets = [];
         var index;
         for (index = 0; index < candidates.length; index++) targets.push(candidates[index].target);
-        return { hostVersion: String(app.version), targets: targets, message: targets.length ? '' : state.message };
+        return { hostVersion: String(app.version), targets: targets, message: targets.length ? '' : message, motionBlur: inspectMotionBlur(selected) };
+    }
+    function normalizedLabel(value) {
+        return String(value || '').toLowerCase().replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i').replace(/[óòôõö]/g, 'o').replace(/[úùûü]/g, 'u').replace(/ç/g, 'c').replace(/[’‘]/g, "'").replace(/^\s+|\s+$/g, '');
+    }
+    function shutterValue(parameter) {
+        var value = parameter.getValue();
+        if (typeof value !== 'number' || !isFinite(value) || value < 0 || value > 360) fail('Premiere returned an unsupported Transform shutter angle.');
+        return value;
+    }
+    function checkboxValue(parameter) {
+        var value = parameter.getValue();
+        if (value !== true && value !== false && value !== 0 && value !== 1) fail('Premiere returned an unsupported composition shutter setting.');
+        return value;
+    }
+    function describeMotionBlur(state, componentIndex) {
+        var component = state.clip.components[componentIndex];
+        if (!/^(AE\.)?ADBE Geometry2?$/.test(component.matchName)) {
+            if (/^(transform|transformar|transformacao)$/.test(normalizedLabel(component.displayName))) fail('Transform was found, but this effect version is not supported: ' + String(component.matchName) + '.');
+            return null;
+        }
+        var properties = component.properties;
+        var angleIndex = -1;
+        var compositionIndex = -1;
+        var descriptors = [];
+        var index;
+        for (index = 0; index < properties.numItems; index++) {
+            var name = normalizedLabel(properties[index].displayName);
+            descriptors.push(String(properties[index].displayName));
+            if (/^(shutter angle|angulo do obturador)$/.test(name)) {
+                if (angleIndex !== -1) fail('Transform has ambiguous shutter angle controls.');
+                angleIndex = index;
+            }
+            if (/^(use (composition|composite)('s)? shutter angle|usar angulo (do|de) obturador da composicao)$/.test(name)) {
+                if (compositionIndex !== -1) fail('Transform has ambiguous composition shutter controls.');
+                compositionIndex = index;
+            }
+        }
+        if (compositionIndex === -1 && angleIndex === 10 && properties.numItems >= 11 && properties.numItems <= 12 && normalizedLabel(properties[9].displayName) === '') compositionIndex = 9;
+        if (angleIndex === -1 || compositionIndex === -1) fail('This Transform layout or language is not supported for motion blur. Use its shutter controls in Effect Controls.');
+        var angle = properties[angleIndex];
+        var composition = properties[compositionIndex];
+        if (angle.isTimeVarying() || composition.isTimeVarying()) fail('Transform shutter controls have keyframes. Adjust them in Effect Controls to preserve that animation.');
+        var shutter = shutterValue(angle);
+        var useComposition = checkboxValue(composition);
+        var target = {
+            id: ZMotionJson.stringify([state.identity, 'motion-blur', componentIndex]),
+            label: String(component.displayName || 'Transform') + ' (' + (componentIndex + 1) + ')',
+            shutterAngle: shutter,
+            useCompositionShutterAngle: !!useComposition,
+            stateToken: ZMotionJson.stringify([state.identity, state.clip.start.seconds, state.clip.end.seconds, state.clip.inPoint.seconds, state.clip.components.numItems, componentIndex, String(component.matchName), descriptors, angleIndex, compositionIndex, shutter, useComposition])
+        };
+        return { target: target, angle: angle, composition: composition, compositionValue: useComposition, componentIndex: componentIndex };
+    }
+    function collectMotionBlur(state) {
+        var candidates = [];
+        var message = 'Add the Transform effect to this clip to enable motion blur.';
+        if (!state.sequence) return { candidates: candidates, message: state.message };
+        var index;
+        for (index = 0; index < state.clip.components.numItems; index++) {
+            try {
+                var candidate = describeMotionBlur(state, index);
+                if (candidate) candidates.push(candidate);
+            } catch (error) { message = String(error.message || error); }
+        }
+        return { candidates: candidates, message: message };
+    }
+    function inspectMotionBlur(state) {
+        var found = collectMotionBlur(state);
+        var targets = [];
+        var index;
+        for (index = 0; index < found.candidates.length; index++) targets.push(found.candidates[index].target);
+        return { targets: targets, message: targets.length ? '' : found.message, clipName: state.clip ? String(state.clip.name || 'Selected clip') : '' };
+    }
+    function setShutterValue(parameter, value, checkbox) {
+        var nativeResult;
+        var nativeError = '';
+        try { nativeResult = parameter.setValue(value, true); }
+        catch (error) { nativeError = String(error.message || error); }
+        var stored = checkbox ? checkboxValue(parameter) : shutterValue(parameter);
+        if (checkbox ? !!stored !== !!value : !storedValueMatches(stored, value)) fail('Premiere did not retain the motion blur setting. Requested: ' + value + '. Stored: ' + stored + '. Native result: ' + (nativeError || String(nativeResult)) + '.');
+    }
+    function applyMotionBlur(payload) {
+        if (!payload.target || typeof payload.target.id !== 'string' || typeof payload.target.stateToken !== 'string') fail('Load a Transform effect before applying motion blur.');
+        var angle = payload.shutterAngle;
+        if (typeof angle !== 'number' || !isFinite(angle) || angle < 0 || angle > 360) fail('Set the shutter angle between 0 and 360 degrees.');
+        var state = clipContext();
+        var found = collectMotionBlur(state);
+        var candidate = null;
+        var index;
+        for (index = 0; index < found.candidates.length; index++) if (found.candidates[index].target.id === payload.target.id) candidate = found.candidates[index];
+        if (!candidate || candidate.target.stateToken !== payload.target.stateToken) fail('The clip, Transform effect or shutter settings changed. Return to the panel to reload them.');
+        var originalAngle = candidate.target.shutterAngle;
+        var originalComposition = candidate.compositionValue;
+        var updated;
+        try {
+            setShutterValue(candidate.composition, typeof originalComposition === 'boolean' ? false : 0, true);
+            setShutterValue(candidate.angle, angle, false);
+            updated = describeMotionBlur(state, candidate.componentIndex);
+            if (!updated || updated.target.useCompositionShutterAngle || !storedValueMatches(updated.target.shutterAngle, angle)) fail('Premiere changed the motion blur settings during application.');
+        } catch (error) {
+            var restored = true;
+            try { setShutterValue(candidate.angle, originalAngle, false); } catch (angleError) { restored = false; }
+            try { setShutterValue(candidate.composition, originalComposition, true); } catch (compositionError) { restored = false; }
+            try {
+                if (!storedValueMatches(shutterValue(candidate.angle), originalAngle) || !!checkboxValue(candidate.composition) !== !!originalComposition) restored = false;
+            } catch (readError) { restored = false; }
+            fail(String(error.message || error) + (restored ? ' Previous shutter settings were restored.' : ' Shutter settings may be partially changed. Use Premiere Undo before retrying.'));
+        }
+        return { target: updated.target, message: angle === 0 ? 'Motion blur disabled for this Transform effect.' : 'Motion blur applied at ' + angle + ' degrees. Check playback in Premiere.' };
     }
     function interpolate(first, last, progress) {
         if (typeof first === 'number') return first + (last - first) * progress;
@@ -274,6 +400,7 @@ var ZMotion = (function () {
             var result;
             if (request.operation === 'inspect') result = inspect(request.payload);
             else if (request.operation === 'apply-curve') result = applyCurve(request.payload);
+            else if (request.operation === 'apply-motion-blur') result = applyMotionBlur(request.payload);
             else fail('Unknown Z Motion operation.');
             return ZMotionJson.stringify({ protocol: 2, ok: true, data: result });
         } catch (error) {

@@ -1,15 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { curveTarget } from "../fixtures/curve-target";
+import { curveTarget, motionBlurTarget } from "../fixtures/curve-target";
 
 async function attachHost(
   page: Page,
-  options: { ambiguous?: boolean; reject?: boolean } = {},
+  options: {
+    ambiguous?: boolean;
+    reject?: boolean;
+    blur?: boolean;
+    noPair?: boolean;
+    multipleBlur?: boolean;
+  } = {},
 ) {
   await page.addInitScript(
-    ({ target, options }) => {
+    ({ target, blur, options }) => {
       let active = target;
+      let activeBlur = blur;
       const requests: {
         operation: string;
         payload: Record<string, unknown>;
@@ -24,7 +31,7 @@ async function attachHost(
             const request = JSON.parse(decodeURIComponent(encoded));
             requests.push(request);
             if (request.operation === "inspect") {
-              const targets = [active];
+              const targets = options.noPair ? [] : [active];
               if (options.ambiguous)
                 targets.push({
                   ...active,
@@ -38,7 +45,27 @@ async function attachHost(
                 JSON.stringify({
                   protocol: 2,
                   ok: true,
-                  data: { hostVersion: "26.5.1", targets, message: "" },
+                  data: {
+                    hostVersion: "26.5.1",
+                    targets,
+                    message: "",
+                    motionBlur: {
+                      clipName: "mouse-arrow.png",
+                      targets: options.blur
+                        ? options.multipleBlur
+                          ? [
+                              activeBlur,
+                              {
+                                ...activeBlur,
+                                id: "transform-2",
+                                label: "Transform (4)",
+                              },
+                            ]
+                          : [activeBlur]
+                        : [],
+                      message: "Add the Transform effect to the selected clip.",
+                    },
+                  },
                 }),
               );
             } else if (options.reject)
@@ -49,7 +76,27 @@ async function attachHost(
                   error: "The keyframes changed after the preview.",
                 }),
               );
-            else {
+            else if (request.operation === "apply-motion-blur") {
+              activeBlur = {
+                ...request.payload.target,
+                shutterAngle: request.payload.shutterAngle,
+                useCompositionShutterAngle: false,
+                stateToken: `shutter-${request.payload.shutterAngle}`,
+              };
+              callback(
+                JSON.stringify({
+                  protocol: 2,
+                  ok: true,
+                  data: {
+                    target: activeBlur,
+                    message:
+                      activeBlur.shutterAngle === 0
+                        ? "Motion blur disabled for this Transform effect."
+                        : `Motion blur applied at ${activeBlur.shutterAngle} degrees. Check playback in Premiere.`,
+                  },
+                }),
+              );
+            } else {
               active = {
                 ...request.payload.target,
                 rangeToken: "updated-pair",
@@ -70,7 +117,7 @@ async function attachHost(
         },
       });
     },
-    { target: curveTarget, options },
+    { target: curveTarget, blur: motionBlurTarget, options },
   );
 }
 
@@ -88,6 +135,101 @@ test("loads the production curve editor directly from disk", async ({
   ).toBeDisabled();
   await expect(page.getByRole("tab")).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+for (const width of [280, 400, 1100]) {
+  test(`motion blur controls fit at ${width}px without movement-generation controls`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "360°", exact: true }).click();
+    await expect(page.getByLabel("Shutter angle (°)")).toHaveValue("360");
+    await expect(
+      page.getByRole("button", { name: "Apply blur to clip" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Create movement" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Apply animation" }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `artifacts/motion-blur-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+  });
+}
+
+test("applies and disables blur without writing animation or needing a current keyframe pair", async ({
+  page,
+}) => {
+  await attachHost(page, { blur: true, noPair: true });
+  await page.setViewportSize({ width: 400, height: 1100 });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  await expect(page.getByText("Current: composition")).toBeVisible();
+  await expect(page.getByText("Clip: mouse-arrow.png")).toBeVisible();
+  await page.getByRole("button", { name: "Refresh clip" }).click();
+  await expect(
+    page.getByRole("button", { name: "Apply blur to clip" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "180°", exact: true }).click();
+  await page.screenshot({
+    path: "artifacts/motion-blur-connected.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "Apply blur to clip" }).click();
+  await expect(page.getByRole("status")).toContainText("180 degrees");
+  await expect(page.getByText("Current: 180°")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Apply animation" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Off", exact: true }).click();
+  await page.getByRole("button", { name: "Apply blur to clip" }).click();
+  await expect(page.getByRole("status")).toContainText("disabled");
+  const mutations = await page.evaluate(() =>
+    (
+      window as unknown as {
+        curveRequests: { operation: string; payload: unknown }[];
+      }
+    ).curveRequests.filter((request) => request.operation !== "inspect"),
+  );
+  expect(mutations.map((request) => request.operation)).toEqual([
+    "apply-motion-blur",
+    "apply-motion-blur",
+  ]);
+  expect(mutations[0].payload).toEqual({
+    target: motionBlurTarget,
+    shutterAngle: 180,
+  });
+});
+
+test("chooses among Transform effects and retains native errors", async ({
+  page,
+}) => {
+  await attachHost(page, { blur: true, multipleBlur: true, reject: true });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  await expect(
+    page.getByRole("button", { name: "Apply blur to clip" }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("Transform effect", { exact: true })
+    .selectOption("transform-2");
+  await page.getByRole("button", { name: "Apply blur to clip" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "changed after the preview",
+  );
+  await expect(page.getByRole("status")).toHaveCount(0);
 });
 
 for (const width of [280, 400, 1100]) {

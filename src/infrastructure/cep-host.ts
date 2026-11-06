@@ -3,6 +3,8 @@ import type {
   HostPort,
   HostResult,
   HostSnapshot,
+  MotionBlurTarget,
+  MotionBlurResult,
 } from "../application/host-port";
 import { isNumericValue } from "../domain/easing-curve";
 
@@ -99,7 +101,41 @@ function snapshot(value: unknown): HostSnapshot {
     !value.targets.every(isTarget)
   )
     throw new Error("Premiere returned an invalid keyframe response.");
+  if (
+    value.motionBlur !== undefined &&
+    (!isRecord(value.motionBlur) ||
+      typeof value.motionBlur.message !== "string" ||
+      (value.motionBlur.clipName !== undefined &&
+        typeof value.motionBlur.clipName !== "string") ||
+      !Array.isArray(value.motionBlur.targets) ||
+      !value.motionBlur.targets.every(isMotionBlurTarget))
+  )
+    throw new Error("Premiere returned an invalid motion blur response.");
   return value as unknown as HostSnapshot;
+}
+
+function isMotionBlurTarget(value: unknown): value is MotionBlurTarget {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.label === "string" &&
+    typeof value.stateToken === "string" &&
+    typeof value.shutterAngle === "number" &&
+    Number.isFinite(value.shutterAngle) &&
+    value.shutterAngle >= 0 &&
+    value.shutterAngle <= 360 &&
+    typeof value.useCompositionShutterAngle === "boolean"
+  );
+}
+
+function motionBlurResult(value: unknown): MotionBlurResult {
+  if (
+    !isRecord(value) ||
+    typeof value.message !== "string" ||
+    !isMotionBlurTarget(value.target)
+  )
+    throw new Error("Premiere returned an invalid motion blur result.");
+  return value as unknown as MotionBlurResult;
 }
 
 function result(value: unknown): HostResult {
@@ -174,5 +210,9 @@ export function createCepHost(
       snapshot(await request("inspect", preferred ? { preferred } : {})),
     apply: async (target, plan) =>
       result(await request("apply-curve", { target, plan })),
+    applyMotionBlur: async (target, shutterAngle) =>
+      motionBlurResult(
+        await request("apply-motion-blur", { target, shutterAngle }),
+      ),
   };
 }

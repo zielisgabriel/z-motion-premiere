@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCepHost } from "./cep-host";
 import { createEasingPlan } from "../domain/easing-curve";
-import { curveTarget } from "../../tests/fixtures/curve-target";
+import {
+  curveTarget,
+  motionBlurTarget,
+} from "../../tests/fixtures/curve-target";
 
 afterEach(() => vi.useRealTimers());
 
@@ -80,5 +83,84 @@ describe("curve-only CEP communication", () => {
     await vi.advanceTimersByTimeAsync(51);
     await result;
     await expect(host.inspect()).rejects.toThrow("Reopen");
+  });
+});
+
+describe("motion blur CEP communication", () => {
+  it("encodes the effect snapshot and angle in a dedicated operation without a keyframe plan", async () => {
+    let request = "";
+    const host = createCepHost({
+      evalScript: (script, callback) => {
+        request = script;
+        callback(
+          JSON.stringify({
+            protocol: 2,
+            ok: true,
+            data: {
+              target: {
+                ...motionBlurTarget,
+                shutterAngle: 180,
+                useCompositionShutterAngle: false,
+              },
+              message: "Applied.",
+            },
+          }),
+        );
+      },
+    });
+    await host.applyMotionBlur(motionBlurTarget, 180);
+    const encoded = JSON.parse(
+      request.slice(request.indexOf("decodeURIComponent(") + 19, -2),
+    );
+    expect(JSON.parse(decodeURIComponent(encoded))).toEqual({
+      protocol: 2,
+      operation: "apply-motion-blur",
+      payload: { target: motionBlurTarget, shutterAngle: 180 },
+    });
+  });
+
+  it.each([
+    { shutterAngle: 361 },
+    { useCompositionShutterAngle: 1 },
+    { stateToken: null },
+  ])("rejects malformed blur snapshots %j", async (invalid) => {
+    const host = createCepHost({
+      evalScript: (_, callback) =>
+        callback(
+          JSON.stringify({
+            protocol: 2,
+            ok: true,
+            data: {
+              hostVersion: "26.5",
+              message: "",
+              targets: [],
+              motionBlur: {
+                targets: [{ ...motionBlurTarget, ...invalid }],
+                message: "",
+              },
+            },
+          }),
+        ),
+    });
+    await expect(host.inspect()).rejects.toThrow("invalid motion blur");
+  });
+
+  it("rejects a malformed mutation result and does not claim applied blur", async () => {
+    const host = createCepHost({
+      evalScript: (_, callback) =>
+        callback(
+          JSON.stringify({
+            protocol: 2,
+            ok: true,
+            data: {
+              target: { ...motionBlurTarget, shutterAngle: -1 },
+              message: "Applied.",
+            },
+          }),
+        ),
+    });
+    await expect(host.applyMotionBlur(motionBlurTarget, 180)).rejects.toThrow(
+      "invalid motion blur result",
+    );
   });
 });

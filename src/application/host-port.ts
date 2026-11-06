@@ -21,6 +21,26 @@ export interface HostSnapshot {
   hostVersion: string;
   targets: CurveTarget[];
   message: string;
+  motionBlur?: MotionBlurSnapshot;
+}
+
+export interface MotionBlurTarget {
+  id: string;
+  label: string;
+  stateToken: string;
+  shutterAngle: number;
+  useCompositionShutterAngle: boolean;
+}
+
+export interface MotionBlurSnapshot {
+  targets: MotionBlurTarget[];
+  message: string;
+  clipName?: string;
+}
+
+export interface MotionBlurResult {
+  target: MotionBlurTarget;
+  message: string;
 }
 
 export interface HostResult {
@@ -33,4 +53,8 @@ export interface HostPort {
   readonly available: boolean;
   inspect(preferred?: RangeReference): Promise<HostSnapshot>;
   apply(target: CurveTarget, plan: EasingPlan): Promise<HostResult>;
+  applyMotionBlur(
+    target: MotionBlurTarget,
+    shutterAngle: number,
+  ): Promise<MotionBlurResult>;
 }

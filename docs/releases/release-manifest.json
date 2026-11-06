@@ -86,6 +86,27 @@
         }
       ],
       "sourceCommit": "77e05e61966167e6201f43ae585f73520686382d"
+    },
+    {
+      "version": "1.1.2",
+      "tag": "v1.1.2",
+      "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2",
+      "prerelease": false,
+      "snapshot": "maintained-source",
+      "originalBuildDate": "2026-11-05",
+      "checksums": "z-motion-1.1.2-sha256sums.txt",
+      "artifacts": [
+        {
+          "name": "z-motion-1.1.2-setup.exe",
+          "size": 459776,
+          "sha256": "1ac9c0b6629e43f10019962f0418232b3f0792ea9708991e9fe6413749c68ea6"
+        },
+        {
+          "name": "z-motion-1.1.2-windows.zip",
+          "size": 444362,
+          "sha256": "deab14c920b9330997487e241672ba74382a30a127dd0724580e0ade62830f0e"
+        }
+      ]
     }
   ],
   "publishedDate": "2026-11-03"

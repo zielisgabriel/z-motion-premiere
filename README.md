@@ -1,8 +1,18 @@
 # Z Motion
 
-Version 1 is an easing curve editor for existing Adobe Premiere Pro 2026 keyframes. The panel contains a graph, a motion preview and one **Apply Animation** action.
+Z Motion is an easing curve editor for existing Adobe Premiere Pro 2026 keyframes, with independent motion blur controls for a clip's Transform effect.
 
-## Workflow
+[Version 1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2) adds **Motion blur** controls for an existing **Transform** effect and recognizes both Premiere Transform versions. It applies the shutter setting to the entire selected clip without requiring a keyframe pair or playhead placement.
+
+## Motion blur
+
+1. Select a clip with the **Transform** effect. No keyframe selection or playhead placement is required.
+2. In Z Motion, scroll to **Motion blur** and check the displayed clip name. **Refresh clip** reloads the timeline selection. Choose the Transform instance if the clip has more than one.
+3. Set **Shutter angle** (180° is the initial suggestion) and click **Apply blur to clip**. Choose **Off** and apply to disable it.
+
+This disables the composition shutter option and sets the effect's manual shutter angle for the entire clip. It preserves movement keyframes and works independently of **Apply animation**, including on retimed or reversed clips. Visible blur requires movement in Transform's Position, Scale or Rotation; a stationary section stays sharp. The Z marker previews timing only; inspect blur in Premiere playback. Native Motion animation and motion already present in recorded footage do not receive this Transform blur. Animated shutter settings are preserved by refusing the operation. See the [motion blur decision](docs/decisions/transform-motion-blur.md) and [1.1.2 detection fix](docs/bug-fixes/transform-motion-blur-detection.md).
+
+## Curve workflow
 
 1. Select one video clip that already has animated properties in Effect Controls.
 2. Place the playhead between the two keyframes you want to smooth.
@@ -18,15 +28,15 @@ The preview animates the Z marker using the same numeric samples that are sent t
 
 ## Install on Windows
 
-1. Close Premiere Pro.
-2. Download [z-motion-1.0.2-setup.exe](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.0.2/z-motion-1.0.2-setup.exe), run it and choose **Install Z Motion**.
+1. Save your project and close Premiere Pro.
+2. Download [z-motion-1.1.2-setup.exe](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-setup.exe), run it and choose **Install Z Motion**.
 3. Open Premiere Pro 2026, then **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
 
 The installer includes the compiled panel, host script, original Z icon, Argentum Sans fonts and documentation. No Node.js, npm, After Effects or separate font installation is required on the editing machine. Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are used by setup.
 
-This is a local unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for local unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
+This is an unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
 
-Alternatively, download [z-motion-1.0.2-windows.zip](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.0.2/z-motion-1.0.2-windows.zip), extract it completely and run `install-z-motion.cmd`. To use a nonstandard Premiere location:
+Alternatively, download [z-motion-1.1.2-windows.zip](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-windows.zip), extract it completely and run `install-z-motion.cmd`. [SHA-256 checksums](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.1.2/z-motion-1.1.2-sha256sums.txt) are available for both packages. To use a nonstandard Premiere location:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -EnableUnsigned -PremierePath 'D:\Adobe\Adobe Premiere Pro 2026'
@@ -40,7 +50,7 @@ The user confirmed Position works in 1.0.1 and reported a Scale value-readback e
 
 See the [Scale precision report](docs/bug-fixes/scale-readback-precision.md) and the [earlier Position fix](docs/bug-fixes/transform-position-keyframes.md). Restore the original endpoint pair if a failed attempt added intermediate keys. Scale application and playback in 1.0.2 still require a native retest.
 
-## Supported ranges
+## Supported curve ranges
 
 - One selected video clip, forward playback at 100% speed.
 - Existing numeric or two-dimensional keyframes on a readable, keyframe-capable component parameter.
@@ -94,6 +104,8 @@ The GitHub Actions workflow checks Linux and Windows, produces browser evidence 
 
 Read the [current implementation report](docs/implementation-report.md), [v1 decision](docs/decisions/curve-only-v1.md), [initial audit](docs/project-audit.md) and [archived toolkit prototype report](docs/history/toolkit-prototype-report.md) before continuing. Transform tools, movement recipes and the preset library were removed from the active product at the user's request. The archived reports retain the earlier work and rationale for future development.
 
+The [2026-11-05 motion blur amendment](docs/decisions/transform-motion-blur.md) adds only Transform shutter controls. Movement-generation recipes, static transforms and the preset library remain outside the active product.
+
 New source files use kebab-case, code and documentation are in English, and explanatory decisions live in documentation rather than code comments. Standard tool filenames retain their required spelling.
 
 ## Provenance
@@ -102,4 +114,4 @@ Z Motion is an independent implementation. The supplied Motion 4.3.0 distributio
 
 ## Repository and releases
 
-[GitHub repository](https://github.com/zielisgabriel/z-motion-premiere), [releases](https://github.com/zielisgabriel/z-motion-premiere/releases), [changelog](changelog.md), [release provenance](docs/release-history.md) and [publication report](docs/git-and-release-report.md). The repository was initially created as private. Commits use Conventional Commits in English. The historical tags preserve packaged snapshots, while main and v1.0.2 contain maintained source.
+[GitHub repository](https://github.com/zielisgabriel/z-motion-premiere), [releases](https://github.com/zielisgabriel/z-motion-premiere/releases), [changelog](changelog.md), [release provenance](docs/release-history.md) and [publication report](docs/git-and-release-report.md). The repository was initially created as private and was already public when 1.1.2 publication was requested. Commits use Conventional Commits in English. The historical tags preserve packaged snapshots, while main and versions from v1.0.2 onward contain maintained source.

@@ -2,6 +2,16 @@
 
 Original builds were created on 2026-11-02. Git history and GitHub publication were completed on 2026-11-03. Earlier tags recover packaged runtime snapshots; they do not claim to restore missing TypeScript source history. See [release provenance](docs/release-history.md).
 
+## [1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2) — 2026-11-05
+
+Adds clip-wide Transform motion blur, shutter angle 0–360°, Off/90°/180°/360° shortcuts and an independent Apply blur to clip action. Fixes disabled controls for Premiere's current `AE.ADBE Geometry2` Transform effect, confirmed in the user's saved project. Blur uses the selected clip independently of curve discovery, playback speed, playhead position and movement keyframes. The panel displays the clip name and provides Refresh clip. Shutter writes are verified and movement keyframes are preserved.
+
+The user approved this version and requested publication. ESLint, 86 automated tests, 12 browser tests, TypeScript, CEP packaging, installer lifecycle and isolated EXE installation passed locally. Native rendering was not independently verified by the agent. This is the first GitHub release containing motion blur; 1.1.1 was a local build.
+
+## 1.1.1 — local build, 2026-11-05
+
+Restored the latest GitHub source (`bdfc512`) and added independent motion blur controls for an existing Transform effect: shutter angle 0–360°, Off/90°/180°/360° shortcuts, effect selection and verified native writes. Applying blur preserves movement keyframes. Stale or animated shutter controls are rejected; failed writes attempt to restore the previous shutter settings. Native blur playback remains unverified. This local build supersedes the discarded 1.1.0 movement-generation installer and is not a published GitHub release.
+
 ## [1.0.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.0.2)
 
 Accepts bounded storage rounding for generated scalar keyframes without loosening original endpoint, neighboring key, curve-plan or 2D Position checks. Readback errors include requested and stored values. Larger mismatches, clamping and no-op writes still fail.
