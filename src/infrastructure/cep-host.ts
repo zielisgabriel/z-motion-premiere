@@ -5,6 +5,7 @@ import type {
   HostSnapshot,
   MotionBlurTarget,
   MotionBlurResult,
+  TransformResult,
 } from "../application/host-port";
 import { isNumericValue } from "../domain/easing-curve";
 
@@ -107,6 +108,11 @@ function snapshot(value: unknown): HostSnapshot {
       typeof value.motionBlur.message !== "string" ||
       (value.motionBlur.clipName !== undefined &&
         typeof value.motionBlur.clipName !== "string") ||
+      (value.motionBlur.selectedClips !== undefined &&
+        (!Number.isInteger(value.motionBlur.selectedClips) ||
+          Number(value.motionBlur.selectedClips) < 0)) ||
+      (value.motionBlur.selectionToken !== undefined &&
+        typeof value.motionBlur.selectionToken !== "string") ||
       !Array.isArray(value.motionBlur.targets) ||
       !value.motionBlur.targets.every(isMotionBlurTarget))
   )
@@ -138,13 +144,26 @@ function motionBlurResult(value: unknown): MotionBlurResult {
   return value as unknown as MotionBlurResult;
 }
 
+function transformResult(value: unknown): TransformResult {
+  if (
+    !isRecord(value) ||
+    !Number.isInteger(value.added) ||
+    Number(value.added) < 1 ||
+    typeof value.message !== "string" ||
+    (value.transformId !== undefined && typeof value.transformId !== "string")
+  )
+    throw new Error("Premiere returned an invalid Transform result.");
+  return value as unknown as TransformResult;
+}
+
 function result(value: unknown): HostResult {
   if (
     !isRecord(value) ||
     !Number.isInteger(value.keyframesWritten) ||
     Number(value.keyframesWritten) < 0 ||
     typeof value.message !== "string" ||
-    !isTarget(value.target)
+    !isTarget(value.target) ||
+    (value.warning !== undefined && typeof value.warning !== "string")
   )
     throw new Error("Premiere returned an invalid curve result.");
   return value as unknown as HostResult;
@@ -214,5 +233,7 @@ export function createCepHost(
       motionBlurResult(
         await request("apply-motion-blur", { target, shutterAngle }),
       ),
+    addTransform: async (selectionToken) =>
+      transformResult(await request("add-transform", { selectionToken })),
   };
 }

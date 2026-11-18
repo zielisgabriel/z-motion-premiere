@@ -10,9 +10,11 @@ export function MotionBlurControls({
   angle,
   pending,
   available,
+  feedback,
   onTargetChange,
   onAngleChange,
   onApply,
+  onAddTransform,
   onRefresh,
 }: {
   snapshot?: MotionBlurSnapshot;
@@ -20,11 +22,14 @@ export function MotionBlurControls({
   angle: number;
   pending: boolean;
   available: boolean;
+  feedback?: { tone: "status" | "error"; text: string };
   onTargetChange: (id: string) => void;
   onAngleChange: (angle: number) => void;
   onApply: () => void;
+  onAddTransform: () => void;
   onRefresh: () => void;
 }) {
+  const selectedClips = snapshot?.selectedClips ?? 0;
   let invalid = "";
   try {
     validateShutterAngle(angle);
@@ -44,11 +49,15 @@ export function MotionBlurControls({
         </span>
       </div>
       <div className="blur-selection">
-        <span>
-          {snapshot?.clipName
-            ? `Clip: ${snapshot.clipName}`
-            : "Select a clip in the timeline"}
-        </span>
+        {snapshot?.clipName ? (
+          <span className="clip-name" title={snapshot.clipName}>
+            Clip: {snapshot.clipName}
+          </span>
+        ) : selectedClips > 1 ? (
+          <span>{selectedClips} clips selected</span>
+        ) : (
+          <span>Select a clip in the timeline</span>
+        )}
         <button
           type="button"
           disabled={!available || pending}
@@ -57,6 +66,17 @@ export function MotionBlurControls({
           Refresh clip
         </button>
       </div>
+      <button
+        type="button"
+        className="add-transform"
+        disabled={!available || pending || !selectedClips}
+        onClick={onAddTransform}
+      >
+        <span aria-hidden="true">+</span>
+        {selectedClips > 1
+          ? `Add Transform to ${selectedClips} clips`
+          : "Add Transform to clip"}
+      </button>
       {snapshot && snapshot.targets.length > 1 && (
         <label className="property-choice blur-choice">
           <span>Transform effect</span>
@@ -119,6 +139,16 @@ export function MotionBlurControls({
           {invalid}
         </p>
       )}
+      {feedback &&
+        (feedback.tone === "error" ? (
+          <p className="feedback error" role="alert">
+            {feedback.text}
+          </p>
+        ) : (
+          <p className="feedback" role="status">
+            {feedback.text}
+          </p>
+        ))}
       <p className="target-hint">
         {!available
           ? "Open Z Motion in Premiere to apply motion blur."

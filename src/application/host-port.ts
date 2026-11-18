@@ -36,6 +36,17 @@ export interface MotionBlurSnapshot {
   targets: MotionBlurTarget[];
   message: string;
   clipName?: string;
+  /** Video clips selected in the timeline; Add Transform works on all of them. */
+  selectedClips?: number;
+  /** Identifies that selection so Premiere can refuse a changed one. */
+  selectionToken?: string;
+}
+
+export interface TransformResult {
+  added: number;
+  message: string;
+  /** The new Transform, when a single clip received one. */
+  transformId?: string;
 }
 
 export interface MotionBlurResult {
@@ -47,6 +58,8 @@ export interface HostResult {
   keyframesWritten: number;
   message: string;
   target: CurveTarget;
+  /** Something Premiere did not confirm, although every frame value was verified. */
+  warning?: string;
 }
 
 export interface HostPort {
@@ -57,4 +70,5 @@ export interface HostPort {
     target: MotionBlurTarget,
     shutterAngle: number,
   ): Promise<MotionBlurResult>;
+  addTransform(selectionToken: string): Promise<TransformResult>;
 }

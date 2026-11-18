@@ -35,7 +35,14 @@ export function createTestHost(overrides: Partial<HostPort> = {}): HostPort {
         targets: [motionBlurTarget],
         message: "",
         clipName: "mouse-arrow.png",
+        selectedClips: 1,
+        selectionToken: "selection-1",
       },
+    }),
+    addTransform: async () => ({
+      added: 1,
+      message: "Transform added to mouse-arrow.png.",
+      transformId: motionBlurTarget.id,
     }),
     apply: async (target, plan) => ({
       keyframesWritten: plan.samples.length - 2,

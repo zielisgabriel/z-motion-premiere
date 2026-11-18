@@ -11,12 +11,15 @@ async function attachHost(
     blur?: boolean;
     noPair?: boolean;
     multipleBlur?: boolean;
+    /** Milliseconds each ExtendScript round trip takes. */
+    delay?: number;
   } = {},
 ) {
   await page.addInitScript(
     ({ target, blur, options }) => {
       let active = target;
       let activeBlur = blur;
+      let transformAdded = false;
       const requests: {
         operation: string;
         payload: Record<string, unknown>;
@@ -24,7 +27,11 @@ async function attachHost(
       Object.assign(window, {
         curveRequests: requests,
         __adobe_cep__: {
-          evalScript(script: string, callback: (value: string) => void) {
+          evalScript(script: string, reply: (value: string) => void) {
+            const callback = (value: string) =>
+              options.delay
+                ? setTimeout(() => reply(value), options.delay)
+                : reply(value);
             const encoded = JSON.parse(
               script.slice(script.indexOf("decodeURIComponent(") + 19, -2),
             );
@@ -51,20 +58,37 @@ async function attachHost(
                     message: "",
                     motionBlur: {
                       clipName: "mouse-arrow.png",
-                      targets: options.blur
-                        ? options.multipleBlur
-                          ? [
-                              activeBlur,
-                              {
-                                ...activeBlur,
-                                id: "transform-2",
-                                label: "Transform (4)",
-                              },
-                            ]
-                          : [activeBlur]
-                        : [],
+                      selectedClips: 1,
+                      selectionToken: "selection-1",
+                      targets:
+                        options.blur || transformAdded
+                          ? options.multipleBlur
+                            ? [
+                                activeBlur,
+                                {
+                                  ...activeBlur,
+                                  id: "transform-2",
+                                  label: "Transform (4)",
+                                },
+                              ]
+                            : [activeBlur]
+                          : [],
                       message: "Add the Transform effect to the selected clip.",
                     },
+                  },
+                }),
+              );
+            } else if (request.operation === "add-transform") {
+              transformAdded = true;
+              callback(
+                JSON.stringify({
+                  protocol: 2,
+                  ok: true,
+                  data: {
+                    added: 1,
+                    message:
+                      "Transform added to mouse-arrow.png. Animate its Position, Scale or Rotation to see motion blur.",
+                    transformId: activeBlur.id,
                   },
                 }),
               );
@@ -233,7 +257,7 @@ test("chooses among Transform effects and retains native errors", async ({
 });
 
 for (const width of [280, 400, 1100]) {
-  test(`curve-only graph and preview fit at ${width}px`, async ({ page }) => {
+  test(`curve graph fits at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
     await page.locator(".workspace").hover();
@@ -244,8 +268,10 @@ for (const width of [280, 400, 1100]) {
       .focus();
     await page.keyboard.press("ArrowLeft");
     await expect(page.getByLabel("Curve X1")).toHaveValue("0.33");
-    await page.getByRole("button", { name: "Replay preview" }).click();
     await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Motion preview" }),
+    ).toHaveCount(0);
     await expect(
       page.getByText("Timeline selection", { exact: true }),
     ).toHaveCount(0);
@@ -296,7 +322,7 @@ test("dragging a handle uses the rendered graph coordinates", async ({
   ).toBeGreaterThan(0);
 });
 
-test("preview and apply use the same samples of the loaded pair", async ({
+test("Apply sends one sample per frame of the loaded pair, endpoints intact", async ({
   page,
 }) => {
   await attachHost(page);
@@ -306,13 +332,6 @@ test("preview and apply use the same samples of the loaded pair", async ({
     page.getByText("Motion / Position", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Ease in", exact: true }).click();
-  await page.getByRole("button", { name: "Replay preview" }).click();
-  const previewX = await page.locator(".preview-shape").evaluate((element) => {
-    const effect = element.getAnimations()[0].effect as KeyframeEffect;
-    return effect
-      .getKeyframes()
-      .map((frame) => new DOMMatrix(String(frame.transform)).m41);
-  });
   await page.getByRole("button", { name: "Apply animation" }).click();
   await expect(page.getByRole("status")).toContainText(
     "24 intermediate keyframes",
@@ -331,7 +350,8 @@ test("preview and apply use the same samples of the loaded pair", async ({
     return requests.find((request) => request.operation === "apply-curve")!
       .payload.plan.samples;
   });
-  expect(samples).toHaveLength(previewX.length);
+  // The fixture pair spans 25 sequence frames: 26 samples, both ends kept.
+  expect(samples).toHaveLength(26);
   expect(samples[0]).toMatchObject({
     timeTicks: curveTarget.startTicks,
     value: curveTarget.startValue,
@@ -340,28 +360,261 @@ test("preview and apply use the same samples of the loaded pair", async ({
     timeTicks: curveTarget.endTicks,
     value: curveTarget.endValue,
   });
-  for (let index = 0; index < samples.length; index += 1) {
-    const visualProgress =
-      (previewX[index] - previewX[0]) / (previewX.at(-1)! - previewX[0]);
-    const valueProgress = (samples[index].value[0] - 0.2) / 0.6;
-    expect(visualProgress).toBeCloseTo(valueProgress, 5);
-  }
+  // Ease in starts slowly: the first half covers well under half the move.
+  expect(samples[13].value[0]).toBeLessThan(0.5);
 });
 
-test("ambiguous properties require a choice and native errors remain errors", async ({
+test("one click applies the curve to every property keyed at the playhead", async ({
+  page,
+}) => {
+  await attachHost(page, { ambiguous: true });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  await expect(page.getByText("2 animated properties")).toBeVisible();
+  await expect(page.getByLabel("Animated property")).toHaveCount(0);
+  await page.getByRole("button", { name: "Apply animation" }).click();
+  await expect(page.getByRole("status")).toContainText("2 properties");
+  const applied = await page.evaluate(() =>
+    (
+      window as unknown as {
+        curveRequests: {
+          operation: string;
+          payload: { target: { id: string } };
+        }[];
+      }
+    ).curveRequests
+      .filter((request) => request.operation === "apply-curve")
+      .map((request) => request.payload.target.id),
+  );
+  expect(applied).toEqual(["position-1", "rotation"]);
+});
+
+test("a native error names the property and claims nothing", async ({
   page,
 }) => {
   await attachHost(page, { ambiguous: true, reject: true });
   await page.goto("/");
   await page.locator(".workspace").hover();
-  await expect(page.getByLabel("Animated property")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Apply animation" }),
-  ).toBeDisabled();
-  await page.getByLabel("Animated property").selectOption("rotation");
   await page.getByRole("button", { name: "Apply animation" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "changed after the preview",
+    "Motion / Position: The keyframes changed after the preview.",
   );
   await expect(page.getByRole("status")).toHaveCount(0);
+});
+
+for (const [width, height] of [
+  [280, 400],
+  [400, 750],
+] as const) {
+  test(`the ${width}×${height} panel fits without page scroll and explains Apply`, async ({
+    page,
+  }) => {
+    await attachHost(page, { ambiguous: true });
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await page.locator(".workspace").hover();
+    await expect(page.getByText("2 animated properties")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Curves" })).toBeVisible();
+    const apply = page.getByRole("button", { name: "Apply animation" });
+    await expect(apply).toBeInViewport();
+    await expect(apply).toHaveAccessibleDescription(
+      "Applies to: Motion / Position, Motion / Rotation",
+    );
+    await expect(page.locator("#apply-hint")).toBeInViewport();
+    const overflow = await page.evaluate(() => ({
+      vertical: document.documentElement.scrollHeight - innerHeight,
+      horizontal: document.documentElement.scrollWidth - innerWidth,
+    }));
+    expect(overflow).toEqual({ vertical: 0, horizontal: 0 });
+    await page.screenshot({
+      path: `artifacts/panel-${width}x${height}.png`,
+      animations: "disabled",
+    });
+  });
+}
+
+test("one click coming from Premiere applies the curve while the panel reloads", async ({
+  page,
+}) => {
+  await attachHost(page, { delay: 250 });
+  await page.setViewportSize({ width: 400, height: 750 });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  await expect(
+    page.getByText("Motion / Position", { exact: true }),
+  ).toBeVisible();
+  // Leave the panel as if the user went back to Premiere's timeline.
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.mouse.move(0, 0);
+  await page.locator("body").dispatchEvent("pointerout");
+  await page.getByRole("button", { name: "Apply animation" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "intermediate keyframes updated",
+  );
+  const writes = await page.evaluate(
+    () =>
+      (
+        window as unknown as { curveRequests: { operation: string }[] }
+      ).curveRequests.filter((request) => request.operation === "apply-curve")
+        .length,
+  );
+  expect(writes).toBe(1);
+});
+
+test("motion blur results are reported inside the Motion blur section", async ({
+  page,
+}) => {
+  await attachHost(page, { blur: true, noPair: true });
+  await page.setViewportSize({ width: 280, height: 400 });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  await expect(page.getByText("Current: composition")).toBeVisible();
+  await page.getByRole("button", { name: "Apply blur to clip" }).click();
+  await expect(
+    page.getByRole("region", { name: "Motion blur" }).getByRole("status"),
+  ).toContainText("180 degrees");
+});
+
+test("one click adds Transform to the selected clip and readies motion blur", async ({
+  page,
+}) => {
+  await attachHost(page, { noPair: true });
+  await page.setViewportSize({ width: 280, height: 400 });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  const blur = page.getByRole("region", { name: "Motion blur" });
+  await expect(blur.getByText("Add the Transform effect")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Apply blur to clip" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Add Transform to clip" }).click();
+  await expect(blur.getByRole("status")).toContainText("Transform added");
+  await expect(page.getByText("Current: composition")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Apply blur to clip" }),
+  ).toBeEnabled();
+  const operations = await page.evaluate(() =>
+    (
+      window as unknown as {
+        curveRequests: { operation: string; payload: unknown }[];
+      }
+    ).curveRequests.filter((request) => request.operation !== "inspect"),
+  );
+  expect(operations).toEqual([
+    {
+      protocol: 2,
+      operation: "add-transform",
+      payload: { selectionToken: "selection-1" },
+    },
+  ]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight - innerHeight,
+    ),
+  ).toBe(0);
+  await blur.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "artifacts/add-transform-280x400.png",
+    animations: "disabled",
+  });
+});
+
+// Expected colours are the DESIGN.md palette values, not read from the CSS.
+const palette = {
+  vanilla: "rgb(255, 247, 211)",
+  pitchBlack: "rgb(10, 10, 10)",
+  ruleCharcoal: "rgb(26, 26, 26)",
+  carmine: "rgb(171, 21, 9)",
+  inversePrimary: "rgb(255, 180, 168)",
+};
+
+for (const [theme, expected] of [
+  [
+    "light",
+    {
+      canvas: palette.vanilla,
+      text: palette.pitchBlack,
+      applyFill: palette.pitchBlack,
+      applyText: palette.vanilla,
+      monitor: palette.pitchBlack,
+      link: palette.carmine,
+    },
+  ],
+  [
+    "dark",
+    {
+      canvas: palette.pitchBlack,
+      text: palette.vanilla,
+      applyFill: palette.vanilla,
+      applyText: palette.pitchBlack,
+      monitor: palette.ruleCharcoal,
+      link: palette.inversePrimary,
+    },
+  ],
+] as const) {
+  test(`the ${theme} theme follows the DESIGN.md palette in a 280×400 panel`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (value) => localStorage.setItem("z-motion-theme", value),
+      theme,
+    );
+    await attachHost(page, { blur: true });
+    await page.setViewportSize({ width: 280, height: 400 });
+    await page.goto("/");
+    await page.locator(".workspace").hover();
+    await expect(
+      page.getByText("Motion / Position", { exact: true }),
+    ).toBeVisible();
+    const colours = await page.evaluate(() => {
+      const style = (selector: string) =>
+        getComputedStyle(document.querySelector(selector)!);
+      return {
+        canvas: style("html").backgroundColor,
+        text: style(".workspace").color,
+        applyFill: style(".primary-button").backgroundColor,
+        applyText: style(".primary-button").color,
+        monitor: style(".curve-monitor").backgroundColor,
+        link: style(".blur-selection button").color,
+      };
+    });
+    expect(colours).toEqual(expected);
+    // Type on carmine stays Vanilla in both themes.
+    await page.getByRole("button", { name: "Apply animation" }).hover();
+    await expect(
+      page.getByRole("button", { name: "Apply animation" }),
+    ).toHaveCSS("color", palette.vanilla);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - innerWidth,
+      ),
+    ).toBe(0);
+    await page.mouse.move(0, 0);
+    await page.screenshot({
+      path: `artifacts/theme-${theme}-280x400.png`,
+      animations: "disabled",
+    });
+    await page
+      .getByRole("region", { name: "Motion blur" })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `artifacts/theme-${theme}-blur-280x400.png`,
+      animations: "disabled",
+    });
+  });
+}
+
+test("the theme chosen in the header survives reopening the panel", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const toggle = page.getByRole("button", { name: "Dark theme" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(
+    page.getByRole("button", { name: "Dark theme" }),
+  ).toHaveAttribute("aria-pressed", "true");
 });

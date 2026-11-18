@@ -164,3 +164,120 @@ describe("motion blur CEP communication", () => {
     );
   });
 });
+
+describe("adding Transform over CEP", () => {
+  function respond(data: unknown) {
+    let request = "";
+    const host = createCepHost({
+      evalScript: (script, callback) => {
+        request = script;
+        callback(JSON.stringify({ protocol: 2, ok: true, data }));
+      },
+    });
+    const sent = () =>
+      JSON.parse(
+        decodeURIComponent(
+          JSON.parse(
+            request.slice(request.indexOf("decodeURIComponent(") + 19, -2),
+          ),
+        ),
+      );
+    return { host, sent };
+  }
+
+  it("sends only the selection token the panel saw", async () => {
+    const { host, sent } = respond({
+      added: 1,
+      message: "Transform added to a.mov.",
+      transformId: "transform-9",
+    });
+    await expect(host.addTransform('["project",["clip-1"]]')).resolves.toEqual({
+      added: 1,
+      message: "Transform added to a.mov.",
+      transformId: "transform-9",
+    });
+    expect(sent()).toEqual({
+      protocol: 2,
+      operation: "add-transform",
+      payload: { selectionToken: '["project",["clip-1"]]' },
+    });
+  });
+
+  it.each([
+    { added: 0, message: "Nothing." },
+    { added: 1.5, message: "Half." },
+    { added: 1 },
+    { added: 1, message: "Added.", transformId: 3 },
+  ])("rejects a malformed result %j", async (data) => {
+    await expect(respond(data).host.addTransform("token")).rejects.toThrow(
+      "invalid Transform result",
+    );
+  });
+
+  it("accepts the selection count and token in the blur snapshot, and rejects bad ones", async () => {
+    const snapshot = (motionBlur: object) =>
+      respond({
+        hostVersion: "26.5.1",
+        message: "",
+        targets: [],
+        motionBlur,
+      }).host.inspect();
+    await expect(
+      snapshot({
+        targets: [],
+        message: "",
+        selectedClips: 3,
+        selectionToken: "t",
+      }),
+    ).resolves.toMatchObject({
+      motionBlur: { selectedClips: 3, selectionToken: "t" },
+    });
+    await expect(
+      snapshot({
+        targets: [],
+        message: "",
+        selectedClips: -1,
+        selectionToken: "t",
+      }),
+    ).rejects.toThrow("invalid motion blur");
+    await expect(
+      snapshot({
+        targets: [],
+        message: "",
+        selectedClips: 1,
+        selectionToken: 7,
+      }),
+    ).rejects.toThrow("invalid motion blur");
+  });
+});
+
+describe("curve result warnings over CEP", () => {
+  function curveHost(data: object) {
+    return createCepHost({
+      evalScript: (_, callback) =>
+        callback(JSON.stringify({ protocol: 2, ok: true, data })),
+    });
+  }
+  const plan = createEasingPlan(curveTarget, [0, 0, 1, 1]);
+
+  it("passes a host warning through with the applied curve", async () => {
+    const result = await curveHost({
+      keyframesWritten: 24,
+      message: "Applied.",
+      target: curveTarget,
+      warning: "Premiere did not confirm linear interpolation on 2 of 26 keys.",
+    }).apply(curveTarget, plan);
+    expect(result.warning).toContain("did not confirm linear interpolation");
+  });
+
+  it("rejects a warning that is not text", async () => {
+    await expect(
+      curveHost({
+        keyframesWritten: 24,
+        message: "Applied.",
+        target: curveTarget,
+        warning: 3,
+      }).apply(curveTarget, plan),
+    ).rejects.toThrow("invalid curve result");
+  });
+});

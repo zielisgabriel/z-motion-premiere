@@ -19,17 +19,42 @@
   font-display: swap;
 }
 
+/*
+ * Palette tokens from DESIGN.md. Light is the default; dark is the
+ * "surface inversion": Pitch Black canvas, Vanilla type, Carmine accent.
+ */
 :root {
-  --paper: #fff7d3;
-  --ink: #0a0a0a;
-  --red: #ab1509;
-  --tape: #e8dfc0;
+  --paper: #fff7d3; /* canvas */
+  --ink: #0a0a0a; /* type, rules and solid buttons */
+  --red: #ab1509; /* carmine fills */
+  --on-red: #fff7d3; /* type on carmine */
+  --accent-text: #ab1509; /* carmine type, links and focus */
+  --muted: #514c3a;
+  --idle: #726b55;
+  --error-text: #830300;
+  --monitor: #0a0a0a; /* the graph is always a dark screen */
+  --monitor-text: #fff7d3;
+  --monitor-muted: #c1b998;
+  --monitor-rule: #34332d;
+  --monitor-diagonal: #615c49;
+  color-scheme: light;
   font-family: "Argentum Sans", sans-serif;
   font-size: 12px;
   line-height: 1.5;
   font-synthesis: none;
   color: var(--ink);
   background: var(--paper);
+}
+
+:root[data-theme="dark"] {
+  --paper: #0a0a0a;
+  --ink: #fff7d3;
+  --accent-text: #ffb4a8;
+  --muted: #c1b998;
+  --idle: #615c49;
+  --error-text: #ffb4a8;
+  --monitor: #1a1a1a;
+  color-scheme: dark;
 }
 
 * {
@@ -48,6 +73,7 @@ select {
 }
 button {
   cursor: pointer;
+  touch-action: manipulation;
 }
 button:disabled {
   cursor: not-allowed;
@@ -56,7 +82,7 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--red);
+  outline: 2px solid var(--accent-text);
   outline-offset: 3px;
 }
 h1,
@@ -68,7 +94,6 @@ p {
 .workspace {
   max-width: 640px;
   height: 100vh;
-  min-height: 420px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -104,8 +129,29 @@ p {
 }
 .brand p {
   font-size: 9px;
-  color: #514c3a;
+  color: var(--muted);
   margin-top: 4px;
+}
+.theme-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--ink);
+  background: transparent;
+}
+.theme-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.theme-toggle:hover {
+  color: var(--paper);
+  background: var(--ink);
 }
 .connection {
   display: flex;
@@ -117,7 +163,7 @@ p {
 .status-dot {
   width: 5px;
   height: 5px;
-  background: #726b55;
+  background: var(--idle);
 }
 .status-dot.connected {
   background: var(--red);
@@ -135,16 +181,19 @@ main {
   margin-bottom: 9px;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
 }
-.target-line h2 {
+.target-line h2,
+.blur-heading h2 {
+  flex: none;
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 .target-name {
+  min-width: 0;
   font-size: 9px;
   text-align: right;
   overflow-wrap: anywhere;
@@ -164,23 +213,24 @@ main {
   min-width: 0;
   height: 31px;
   padding: 4px 7px;
-  background: transparent;
+  background: var(--paper);
   border: 1px solid var(--ink);
   font-size: 10px;
 }
 .property-choice option {
   background: var(--paper);
+  color: var(--ink);
 }
 
 .curve-monitor {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--monitor);
+  color: var(--monitor-text);
   border: 1px solid var(--ink);
 }
 .monitor-header {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px solid #34332d;
+  border-bottom: 1px solid var(--monitor-rule);
   padding: 7px 12px;
   font-size: 8px;
   text-transform: uppercase;
@@ -191,19 +241,21 @@ main {
   width: 100%;
   height: clamp(160px, 28vh, 260px);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .graph-grid {
-  stroke: #34332d;
+  stroke: var(--monitor-rule);
   stroke-width: 1;
 }
 .graph-diagonal {
-  stroke: #615c49;
+  stroke: var(--monitor-diagonal);
   stroke-width: 1;
   stroke-dasharray: 4 5;
 }
 .graph-curve {
   fill: none;
-  stroke: var(--paper);
+  stroke: var(--monitor-text);
   stroke-width: 2.5;
 }
 .graph-handle-line {
@@ -216,7 +268,7 @@ main {
   stroke-width: 2;
   cursor: grab;
 }
-.graph-handle:focus {
+.graph-handle:focus-visible {
   stroke: #fff;
   stroke-width: 4;
   outline: none;
@@ -225,19 +277,24 @@ main {
   cursor: grabbing;
 }
 .graph-endpoint {
-  fill: var(--paper);
+  fill: var(--monitor-text);
 }
 .curve-svg text {
-  fill: #c1b998;
+  fill: var(--monitor-muted);
   font:
     10px "Argentum Sans",
     sans-serif;
 }
+.curve-readout,
+.coordinate-inputs input,
+.blur-adjustment input {
+  font-variant-numeric: tabular-nums;
+}
 .curve-readout {
   padding: 6px 12px;
-  border-top: 1px solid #34332d;
+  border-top: 1px solid var(--monitor-rule);
   text-align: center;
-  color: #c1b998;
+  color: var(--monitor-muted);
   font-size: 9px;
   letter-spacing: 0.07em;
 }
@@ -257,10 +314,10 @@ main {
   font-size: 9px;
 }
 .curve-presets button[aria-pressed="true"] {
-  color: var(--paper);
+  color: var(--on-red);
   background: var(--red);
 }
-.curve-presets button:hover {
+.curve-presets button:hover:not([aria-pressed="true"]) {
   color: var(--paper);
   background: var(--ink);
 }
@@ -287,86 +344,9 @@ main {
   font-size: 11px;
 }
 
-.motion-preview {
-  margin-top: 14px;
-  border: 1px solid var(--ink);
-}
-.preview-topline {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 9px;
-  border-bottom: 1px solid var(--ink);
-  font-size: 8px;
-}
-.preview-topline span:first-child {
-  font-weight: 700;
-}
-.preview-stage {
-  height: 94px;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: var(--tape);
-}
-.preview-guide {
-  position: absolute;
-  height: 1px;
-  width: 74%;
-  background: #b2aa8e;
-}
-.preview-guide:before,
-.preview-guide:after {
-  content: "";
-  position: absolute;
-  top: -5px;
-  width: 1px;
-  height: 11px;
-  background: #b2aa8e;
-}
-.preview-guide:before {
-  left: 0;
-}
-.preview-guide:after {
-  right: 0;
-}
-.preview-shape {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  line-height: 36px;
-  text-align: center;
-  font-weight: 900;
-  font-size: 28px;
-  color: var(--paper);
-  background: var(--red);
-}
-.preview-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  border-top: 1px solid var(--ink);
-  padding: 5px 9px;
-  font-size: 9px;
-}
-.preview-toolbar > span {
-  overflow-wrap: anywhere;
-}
-.preview-toolbar button {
-  flex: none;
-  border: 0;
-  padding: 2px 0 2px 8px;
-  color: var(--red);
-  background: transparent;
-  font-size: 9px;
-  font-weight: 700;
-}
 .target-hint {
   margin-top: 9px;
-  color: #514c3a;
+  color: var(--muted);
   font-size: 9px;
   line-height: 1.6;
   max-width: 65ch;
@@ -384,17 +364,13 @@ main {
   gap: 8px;
   margin-bottom: 8px;
 }
-.blur-heading h2 {
-  font-size: 12px;
-  font-weight: 900;
-}
 .blur-heading span {
   font-size: 8px;
 }
 .blur-selection {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   margin-bottom: 9px;
   font-size: 9px;
@@ -403,14 +379,47 @@ main {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.blur-selection .clip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .blur-selection button {
   flex: none;
   border: 0;
   background: transparent;
-  color: var(--red);
+  color: var(--accent-text);
   padding: 2px 0;
   font-size: 9px;
   font-weight: 700;
+}
+.add-transform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  margin-bottom: 9px;
+  padding: 4px 8px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+}
+.add-transform > span {
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+.add-transform:hover:not(:disabled) {
+  color: var(--paper);
+  background: var(--ink);
+}
+.add-transform:hover:not(:disabled) > span {
+  color: var(--paper);
 }
 .blur-choice {
   margin-bottom: 9px;
@@ -443,6 +452,7 @@ main {
   font-size: 10px;
 }
 .blur-apply:hover:not(:disabled) {
+  color: var(--on-red);
   background: var(--red);
 }
 .blur-presets {
@@ -461,7 +471,7 @@ main {
   border-left: 1px solid var(--ink);
 }
 .blur-presets button[aria-pressed="true"] {
-  color: var(--paper);
+  color: var(--on-red);
   background: var(--red);
 }
 .motion-blur-controls .feedback {
@@ -471,6 +481,16 @@ main {
 .apply-section {
   padding: 12px 18px 9px;
   border-top: 1px solid var(--ink);
+}
+.apply-hint {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .primary-button {
   display: flex;
@@ -494,6 +514,7 @@ main {
 }
 .primary-button:hover:not(:disabled) {
   transform: translate(-1px, -1px);
+  color: var(--on-red);
   background: var(--red);
   box-shadow: 3px 3px 0 var(--ink);
 }
@@ -506,7 +527,7 @@ main {
 .feedback.error {
   padding-left: 9px;
   border-left: 3px solid var(--red);
-  color: #830300;
+  color: var(--error-text);
 }
 .footer-line {
   display: flex;
@@ -516,7 +537,7 @@ main {
   font-size: 7px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #514c3a;
+  color: var(--muted);
 }
 
 @media (max-width: 359px) {
@@ -548,6 +569,91 @@ main {
     flex-direction: column;
     gap: 4px;
     align-items: start;
+  }
+}
+
+/* Short panels: tighten spacing and the graph, keep the type size. */
+@media (max-height: 560px) {
+  .brand-bar {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-top-width: 3px;
+  }
+  .brand img {
+    width: 24px;
+    height: 24px;
+  }
+  .brand h1 {
+    font-size: 18px;
+  }
+  .brand p {
+    margin-top: 2px;
+  }
+  .curve-section {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .target-line {
+    margin-bottom: 6px;
+  }
+  .monitor-header {
+    padding: 5px 10px;
+  }
+  .curve-svg {
+    height: clamp(104px, 26vh, 200px);
+  }
+  .curve-readout {
+    padding: 4px 10px;
+  }
+  .curve-presets,
+  .coordinate-inputs {
+    margin-top: 6px;
+  }
+  .curve-presets button {
+    padding: 4px 3px;
+  }
+  .coordinate-inputs input {
+    height: 26px;
+    padding: 3px 6px;
+  }
+  .motion-blur-controls {
+    margin-top: 10px;
+  }
+  .motion-blur-controls {
+    padding-top: 8px;
+  }
+  .blur-adjustment input,
+  .blur-apply {
+    height: 28px;
+    min-height: 28px;
+  }
+  .add-transform {
+    min-height: 26px;
+    margin-bottom: 6px;
+    padding: 3px 8px;
+  }
+  .apply-section {
+    padding-top: 8px;
+    padding-bottom: 6px;
+  }
+  .apply-hint {
+    margin-bottom: 6px;
+  }
+  .primary-button {
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+  .primary-button > span {
+    font-size: 16px;
+  }
+  .footer-line {
+    margin-top: 6px;
+  }
+}
+
+@media (max-height: 480px) {
+  .footer-line {
+    display: none;
   }
 }
 

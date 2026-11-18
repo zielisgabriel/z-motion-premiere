@@ -7,79 +7,157 @@ import type {
   HostSnapshot,
   MotionBlurTarget,
 } from "./application/host-port";
-import {
-  defaultCurve,
-  type Curve,
-  type KeyframeRange,
-} from "./domain/easing-curve";
+import { defaultCurve, type Curve } from "./domain/easing-curve";
 import { CurveEditor } from "./presentation/curve-editor";
-import { MotionPreview } from "./presentation/motion-preview";
 import { MotionBlurControls } from "./presentation/motion-blur-controls";
+import { ThemeToggle } from "./presentation/theme-toggle";
+import {
+  applyTheme,
+  panelStorage,
+  readTheme,
+  saveTheme,
+  type Theme,
+} from "./presentation/theme";
 import brandIcon from "../public/images/icon.png";
 
-const previewRange: KeyframeRange = {
-  startTicks: "0",
-  endTicks: "254016000000",
-  frameTicks: "8467200000",
-  startValue: 0,
-  endValue: 1,
-};
+/** Identifies the set of properties the user saw, to detect a changed set. */
+function propertySet(targets: CurveTarget[]) {
+  return targets.length
+    ? {
+        id: targets
+          .map((target) => target.id)
+          .sort()
+          .join("|"),
+      }
+    : undefined;
+}
+
+interface Feedback {
+  channel: "curve" | "blur";
+  tone: "status" | "error";
+  text: string;
+}
 
 export default function App({ host }: { host: HostPort }) {
   const service = useMemo(() => createCurveService(host), [host]);
   const blurService = useMemo(() => createMotionBlurService(host), [host]);
   const [blurTarget, setBlurTarget] = useState<MotionBlurTarget>();
   const blurTargetRef = useRef<MotionBlurTarget | undefined>(undefined);
+  const selectionRef = useRef<string | undefined>(undefined);
+  const addedTransformId = useRef<string | undefined>(undefined);
   const [shutterAngle, setShutterAngle] = useState(180);
   const [curve, setCurve] = useState<Curve>(defaultCurve);
+  const [theme, setTheme] = useState<Theme>(() => readTheme(panelStorage()));
   const [snapshot, setSnapshot] = useState<HostSnapshot | null>(null);
-  const [target, setTarget] = useState<CurveTarget>();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const targetRef = useRef<CurveTarget | undefined>(undefined);
-  const running = useRef(false);
+  // Premiere does not expose keyframe selection, so the curve applies to
+  // every property with a keyframe pair around the playhead.
+  const [targets, setTargets] = useState<CurveTarget[]>([]);
+  // Reloading the Premiere selection is silent: only writes to Premiere
+  // disable the controls, so a click that focuses the panel is never lost.
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [inspectError, setInspectError] = useState("");
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const targetsRef = useRef<CurveTarget[]>([]);
+  const writing = useRef(false);
+  const inspection = useRef<Promise<void> | null>(null);
   const mounted = useRef(true);
   const engaged = useRef(false);
 
-  const refresh = useCallback(async () => {
-    if (!host.available || running.current) return;
-    running.current = true;
-    setPending(true);
-    try {
-      const next = await service.inspect(targetRef.current);
+  const refresh = useCallback((): Promise<void> => {
+    if (!host.available || writing.current) return Promise.resolve();
+    if (inspection.current) return inspection.current;
+    setLoading(true);
+    const run = inspect().finally(() => {
+      inspection.current = null;
+      if (mounted.current) setLoading(false);
+    });
+    inspection.current = run;
+    return run;
+
+    async function inspect() {
+      try {
+        await reload();
+      } catch (failure) {
+        if (mounted.current) {
+          targetsRef.current = [];
+          setTargets([]);
+          blurTargetRef.current = undefined;
+          setBlurTarget(undefined);
+          setInspectError((failure as Error).message);
+        }
+      }
+    }
+
+    async function reload() {
+      const next = await service.inspect(targetsRef.current[0]);
       if (!mounted.current) return;
-      const previous = next.targets.find(
-        (candidate) => candidate.id === targetRef.current?.id,
-      );
-      const chosen =
-        previous ?? (next.targets.length === 1 ? next.targets[0] : undefined);
-      targetRef.current = chosen;
-      setTarget(chosen);
+      targetsRef.current = next.targets;
+      setTargets(next.targets);
       setSnapshot(next);
+      selectionRef.current = next.motionBlur?.selectionToken;
       const blurTargets = next.motionBlur?.targets ?? [];
+      // A Transform the panel just added wins over the previous choice.
+      const wantedBlur = addedTransformId.current ?? blurTargetRef.current?.id;
+      addedTransformId.current = undefined;
       const selectedBlur =
-        blurTargets.find(
-          (candidate) => candidate.id === blurTargetRef.current?.id,
-        ) ?? (blurTargets.length === 1 ? blurTargets[0] : undefined);
+        blurTargets.find((candidate) => candidate.id === wantedBlur) ??
+        (blurTargets.length === 1 ? blurTargets[0] : undefined);
       if (selectedBlur?.stateToken !== blurTargetRef.current?.stateToken)
         setShutterAngle(selectedBlur?.shutterAngle || 180);
       blurTargetRef.current = selectedBlur;
       setBlurTarget(selectedBlur);
-      setError("");
-    } catch (failure) {
-      if (mounted.current) {
-        targetRef.current = undefined;
-        setTarget(undefined);
-        blurTargetRef.current = undefined;
-        setBlurTarget(undefined);
-        setError((failure as Error).message);
-      }
-    } finally {
-      running.current = false;
-      if (mounted.current) setPending(false);
+      setInspectError("");
     }
   }, [host.available, service]);
+
+  /**
+   * Runs one Premiere write at a time. A reload already in flight finishes
+   * first, and the write only proceeds if the item the user saw is still the
+   * one Premiere reports. Its result is reported in the section that
+   * started it.
+   */
+  async function write<T extends { id: string }>(
+    channel: Feedback["channel"],
+    seen: T | undefined,
+    current: () => T | undefined,
+    work: (latest: T) => Promise<string | undefined>,
+  ) {
+    if (!seen || writing.current) return;
+    writing.current = true;
+    setApplying(true);
+    setFeedback(null);
+    try {
+      await inspection.current;
+      if (!mounted.current) return;
+      const latest = current();
+      if (!latest || latest.id !== seen.id)
+        throw new Error(
+          "The Premiere selection changed before applying. Review it and apply again.",
+        );
+      const text = await work(latest);
+      if (mounted.current && text)
+        setFeedback({ channel, tone: "status", text });
+    } catch (failure) {
+      if (mounted.current)
+        setFeedback({
+          channel,
+          tone: "error",
+          text: (failure as Error).message,
+        });
+    } finally {
+      writing.current = false;
+      if (mounted.current) setApplying(false);
+    }
+  }
+
+  useEffect(() => applyTheme(document.documentElement, theme), [theme]);
+
+  function toggleTheme() {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    saveTheme(panelStorage(), next);
+    setTheme(next);
+  }
 
   const enter = useCallback(() => {
     engaged.current = true;
@@ -104,52 +182,70 @@ export default function App({ host }: { host: HostPort }) {
     };
   }, [refresh]);
 
-  const prepared = useMemo(() => {
-    try {
-      return {
-        plan: service.prepare(
-          target ?? {
-            ...previewRange,
-            id: "preview",
-            label: "Timing preview",
-            kind: "value",
-            rangeToken: "",
-          },
-          curve,
-        ),
-        error: "",
-      };
-    } catch (failure) {
-      return { plan: null, error: (failure as Error).message };
+  // Every property must accept the curve before anything is written.
+  const curveProblem = useMemo(() => {
+    for (const target of targets) {
+      try {
+        service.prepare(target, curve);
+      } catch (failure) {
+        return `${target.label}: ${(failure as Error).message}`;
+      }
     }
-  }, [service, target, curve]);
+    return "";
+  }, [service, targets, curve]);
 
   async function apply() {
-    if (!target || !prepared.plan || running.current) return;
-    running.current = true;
-    setPending(true);
-    setMessage("");
-    setError("");
-    try {
-      const result = await service.apply(target, curve);
-      targetRef.current = result.target;
-      setTarget(result.target);
-      setMessage(
-        `${result.keyframesWritten} intermediate keyframes updated. Endpoints preserved.`,
-      );
-    } catch (failure) {
-      setError((failure as Error).message);
-    } finally {
-      running.current = false;
-      setPending(false);
-    }
-  }
-
-  function chooseTarget(id: string) {
-    const chosen = snapshot?.targets.find((candidate) => candidate.id === id);
-    targetRef.current = chosen;
-    setTarget(chosen);
-    setMessage("");
+    if (curveProblem) return;
+    await write(
+      "curve",
+      propertySet(targets),
+      () => propertySet(targetsRef.current),
+      async () => {
+        const latest = targetsRef.current;
+        const applied: CurveTarget[] = [];
+        const failures: string[] = [];
+        const warnings: string[] = [];
+        let written = 0;
+        // Properties are independent: one failure does not stop the others.
+        for (const target of latest) {
+          try {
+            const result = await service.apply(target, curve);
+            applied.push(result.target);
+            written += result.keyframesWritten;
+            if (result.warning)
+              warnings.push(
+                latest.length === 1
+                  ? result.warning
+                  : `${target.label}: ${result.warning}`,
+              );
+          } catch (failure) {
+            failures.push(`${target.label}: ${(failure as Error).message}`);
+          }
+        }
+        if (mounted.current) {
+          const next = latest.map(
+            (target) => applied.find((item) => item.id === target.id) ?? target,
+          );
+          targetsRef.current = next;
+          setTargets(next);
+        }
+        const notes = warnings.length ? ` ${warnings.join(" ")}` : "";
+        if (failures.length)
+          throw new Error(
+            failures.join(" ") +
+              (applied.length
+                ? ` Applied to ${applied.map((item) => item.label).join(", ")}.`
+                : "") +
+              notes,
+          );
+        return (
+          (latest.length === 1
+            ? `${written} intermediate keyframes updated. Endpoints preserved.`
+            : `Curve applied to ${latest.length} properties: ${written} intermediate keyframes updated. Endpoints preserved.`) +
+          notes
+        );
+      },
+    );
   }
 
   function chooseBlurTarget(id: string) {
@@ -159,53 +255,86 @@ export default function App({ host }: { host: HostPort }) {
     blurTargetRef.current = chosen;
     setBlurTarget(chosen);
     setShutterAngle(chosen?.shutterAngle || 180);
-    setMessage("");
+    clearStatus();
+  }
+
+  async function addTransform() {
+    const token = snapshot?.motionBlur?.selectionToken;
+    const current = () =>
+      selectionRef.current ? { id: selectionRef.current } : undefined;
+    let added = false;
+    await write(
+      "blur",
+      token ? { id: token } : undefined,
+      current,
+      async (latest) => {
+        const result = await blurService.addTransform(latest.id);
+        addedTransformId.current = result.transformId;
+        added = true;
+        return result.message;
+      },
+    );
+    // Load the new effect so motion blur can be applied right away.
+    if (added && mounted.current) await refresh();
   }
 
   async function applyBlur() {
-    if (!blurTarget || running.current) return;
-    running.current = true;
-    setPending(true);
-    setMessage("");
-    setError("");
-    try {
-      const result = await blurService.apply(blurTarget, shutterAngle);
-      if (!mounted.current) return;
-      blurTargetRef.current = result.target;
-      setBlurTarget(result.target);
-      setSnapshot((current) =>
-        current?.motionBlur
-          ? {
-              ...current,
-              motionBlur: {
-                ...current.motionBlur,
-                targets: current.motionBlur.targets.map((item) =>
-                  item.id === result.target.id ? result.target : item,
-                ),
-              },
-            }
-          : current,
-      );
-      setMessage(result.message);
-    } catch (failure) {
-      if (mounted.current) setError((failure as Error).message);
-    } finally {
-      running.current = false;
-      if (mounted.current) setPending(false);
-    }
+    const angle = shutterAngle;
+    await write(
+      "blur",
+      blurTarget,
+      () => blurTargetRef.current,
+      async (latest) => {
+        const result = await blurService.apply(latest, angle);
+        if (!mounted.current) return;
+        blurTargetRef.current = result.target;
+        setBlurTarget(result.target);
+        setSnapshot((current) =>
+          current?.motionBlur
+            ? {
+                ...current,
+                motionBlur: {
+                  ...current.motionBlur,
+                  targets: current.motionBlur.targets.map((item) =>
+                    item.id === result.target.id ? result.target : item,
+                  ),
+                },
+              }
+            : current,
+        );
+        return result.message;
+      },
+    );
+  }
+
+  function clearStatus() {
+    setFeedback((current) => (current?.tone === "status" ? null : current));
   }
 
   function changeCurve(next: Curve) {
     setCurve(next);
-    setMessage("");
+    clearStatus();
   }
 
-  const hint = target
-    ? "Endpoints stay fixed. The curve changes the motion between them."
-    : host.available
-      ? snapshot?.message ||
-        "Place the playhead between two keyframes in Effect Controls."
-      : "Open Z Motion in Premiere to load an existing keyframe pair.";
+  // Shown beside the Apply button so a small panel always explains why it is
+  // disabled, even when the editor above is scrolled.
+  const labels = targets.map((target) => target.label).join(", ");
+  const hint = targets.length
+    ? `Applies to: ${labels}`
+    : !host.available
+      ? "Open Z Motion in Premiere to load an existing keyframe pair."
+      : snapshot?.message ||
+        (loading
+          ? "Loading keyframes from Premiere…"
+          : "Place the playhead between two keyframes in Effect Controls.");
+
+  const curveFeedback = feedback?.channel === "curve" ? feedback : undefined;
+  const curveError =
+    inspectError ||
+    (curveFeedback?.tone === "error" ? curveFeedback.text : "") ||
+    curveProblem;
+  const curveStatus =
+    curveFeedback?.tone === "status" ? curveFeedback.text : "";
 
   return (
     <div
@@ -229,87 +358,80 @@ export default function App({ host }: { host: HostPort }) {
         </div>
         <span className="connection">
           <span
-            className={`status-dot ${target || blurTarget ? "connected" : ""}`}
+            aria-hidden="true"
+            className={`status-dot ${snapshot && !inspectError ? "connected" : ""}`}
           />
           {host.available
             ? snapshot
               ? `Premiere ${snapshot.hostVersion}`
-              : pending
-                ? "Connecting"
+              : loading
+                ? "Connecting…"
                 : "Premiere"
             : "Preview mode"}
         </span>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
       </header>
       <main aria-label="Curve editor">
         <section className="curve-section" aria-label="Easing curve">
           <div className="target-line">
-            {snapshot && snapshot.targets.length > 1 ? (
-              <label className="property-choice">
-                <span>Animated property</span>
-                <select
-                  aria-label="Animated property"
-                  value={target?.id ?? ""}
-                  onChange={(event) => chooseTarget(event.target.value)}
-                  disabled={pending}
-                >
-                  <option value="">Choose a property</option>
-                  {snapshot.targets.map((candidate) => (
-                    <option value={candidate.id} key={candidate.id}>
-                      {candidate.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <>
-                <h2>Curves</h2>
-                <span className="target-name">
-                  {target?.label ?? "Timing preview"}
-                </span>
-              </>
-            )}
+            <h2>Curves</h2>
+            <span className="target-name" title={labels || undefined}>
+              {targets.length === 0
+                ? "No keyframes loaded"
+                : targets.length === 1
+                  ? targets[0].label
+                  : `${targets.length} animated properties`}
+            </span>
           </div>
           <CurveEditor curve={curve} onChange={changeCurve} />
-          <MotionPreview plan={prepared.plan} kind={target?.kind ?? "value"} />
-          <p className="target-hint">{target ? hint : `Curves: ${hint}`}</p>
           <MotionBlurControls
             snapshot={snapshot?.motionBlur}
             target={blurTarget}
             angle={shutterAngle}
-            pending={pending}
+            pending={applying}
             available={host.available}
             onTargetChange={chooseBlurTarget}
             onAngleChange={(next) => {
               setShutterAngle(next);
-              setMessage("");
+              clearStatus();
             }}
+            feedback={feedback?.channel === "blur" ? feedback : undefined}
             onApply={() => void applyBlur()}
+            onAddTransform={() => void addTransform()}
             onRefresh={enter}
           />
         </section>
       </main>
       <div className="apply-section">
-        {(error || prepared.error) && (
-          <p className="feedback error" role="alert">
-            {error || prepared.error}
+        {/* One line of text above the button: the latest result or, when there
+            is none, the hint. It also describes the button for screen readers. */}
+        {curveError ? (
+          <p className="feedback error" role="alert" id="apply-hint">
+            {curveError}
           </p>
-        )}
-        {message && !error && (
-          <p className="feedback" role="status">
-            {message}
+        ) : curveStatus ? (
+          <p className="feedback" role="status" id="apply-hint">
+            {curveStatus}
+          </p>
+        ) : (
+          <p className="apply-hint" id="apply-hint">
+            {hint}
           </p>
         )}
         <button
           className="primary-button"
-          disabled={!host.available || !target || !prepared.plan || pending}
+          disabled={
+            !host.available || !targets.length || !!curveProblem || applying
+          }
           onClick={() => void apply()}
           aria-label="Apply animation"
+          aria-describedby="apply-hint"
         >
-          {pending ? "Working in Premiere…" : "Apply animation"}
+          {applying ? "Working in Premiere…" : "Apply animation"}
           <span aria-hidden="true">↗</span>
         </button>
         <div className="footer-line">
-          <span>Z Motion / 1.1.2</span>
+          <span>Z Motion / 1.2.0</span>
           <span>Two keys. Your curve.</span>
         </div>
       </div>
