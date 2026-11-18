@@ -2,6 +2,14 @@
 
 Original builds were created on 2026-11-02. Git history and GitHub publication were completed on 2026-11-03. Earlier tags recover packaged runtime snapshots; they do not claim to restore missing TypeScript source history. See [release provenance](docs/release-history.md).
 
+## [1.2.1](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.1) — 2026-11-18
+
+Choose which properties receive the curve. The button above **Apply animation** previews the checked properties and opens a dialog to uncheck any of them, for example a Twixtor speed curve that shares the playhead with Scale and Opacity. A new keyframe pair starts with every property checked; reapplying to the same pair keeps the choice. A property left out no longer blocks Apply.
+
+Motion blur uses the same picker: when a clip has several Transform effects, the button above the shutter angle previews the checked ones and opens a dialog to uncheck any. **Apply blur to clip** sets the angle on every checked Transform, all checked by default, and names any that Premiere rejects.
+
+The user approved this release. ESLint, TypeScript, 147 automated tests and 24 browser flows passed locally; the pickers were not verified in Premiere by the agent.
+
 ## [1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) — 2026-11-18
 
 Fixes **Apply animation** and **Apply blur to clip** ignoring a click that comes from Premiere: reloading the selection no longer disables the panel, and a write waits for a reload in flight. The reason Apply is unavailable, or the latest curve result, now sits right above the button. Motion blur results appear in the Motion blur section. The preview Z reaches the guide ticks and stays inside the stage; the 280×400 minimum panel no longer scrolls and short panels use a compact layout. See the [bug report](docs/bug-fixes/panel-apply-click-and-layout.md). Native Premiere application was not re-verified.

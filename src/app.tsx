@@ -534,7 +534,7 @@ export default function App({ host }: { host: HostPort }) {
           <span aria-hidden="true">↗</span>
         </button>
         <div className="footer-line">
-          <span>Z Motion / 1.2.0</span>
+          <span>Z Motion / 1.2.1</span>
           <span>Two keys. Your curve.</span>
         </div>
       </div>

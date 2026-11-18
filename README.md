@@ -2,12 +2,12 @@
 
 Z Motion is an easing curve editor for existing Adobe Premiere Pro 2026 keyframes, with independent motion blur controls for a clip's Transform effect.
 
-[Version 1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) applies one curve to every property keyed around the playhead, adds a one-click **Add Transform to clip** button and a dark theme, and fixes clicks that the panel ignored while reloading the Premiere selection. Motion blur controls for the clip's **Transform** effect, added in [1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2), apply the shutter setting to the entire selected clip.
+[Version 1.2.1](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.1) lets you choose which properties receive the curve and which Transform effects receive motion blur, from a checklist dialog that starts with everything checked. [Version 1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) applies one curve to every property keyed around the playhead, adds a one-click **Add Transform to clip** button and a dark theme, and fixes clicks that the panel ignored while reloading the Premiere selection. Motion blur controls for the clip's **Transform** effect, added in [1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2), apply the shutter setting to the entire selected clip.
 
 ## Motion blur
 
 1. Select a clip. If it has no **Transform** effect, click **Add Transform to clip** (it adds one to every selected video clip). No keyframe selection or playhead placement is required.
-2. In Z Motion, scroll to **Motion blur** and check the displayed clip name. **Refresh clip** reloads the timeline selection. Choose the Transform instance if the clip has more than one.
+2. In Z Motion, scroll to **Motion blur** and check the displayed clip name. **Refresh clip** reloads the timeline selection. If the clip has more than one Transform, all are checked; the button above the shutter angle previews them and opens a dialog to uncheck any.
 3. Set **Shutter angle** (180° is the initial suggestion) and click **Apply blur to clip**. Choose **Off** and apply to disable it.
 
 This disables the composition shutter option and sets the effect's manual shutter angle for the entire clip. It preserves movement keyframes and works independently of **Apply animation**, including on retimed or reversed clips. Visible blur requires movement in Transform's Position, Scale or Rotation; a stationary section stays sharp. Inspect blur in Premiere playback. Native Motion animation and motion already present in recorded footage do not receive this Transform blur. Animated shutter settings are preserved by refusing the operation. See the [motion blur decision](docs/decisions/transform-motion-blur.md) and [1.1.2 detection fix](docs/bug-fixes/transform-motion-blur-detection.md).
@@ -20,7 +20,7 @@ The button at the right of the header switches between the default light theme a
 
 1. Select one video clip that already has animated properties in Effect Controls.
 2. Place the playhead between the two keyframes you want to smooth.
-3. Move the pointer into Z Motion or focus a graph control. The keyframe pairs around the playhead load automatically. The line above **Apply animation** lists every property the curve will change (for example Position and Scale).
+3. Move the pointer into Z Motion or focus a graph control. The keyframe pairs around the playhead load automatically, all checked. The button above **Apply animation** previews the checked properties; click it to uncheck any you want left alone (for example a Twixtor speed curve).
 4. Adjust the curve using its handles, arrow keys, coordinates or curve shortcuts.
 5. Click **Apply Animation**. The plugin preserves both endpoint values and times and writes the intermediate sequence-frame values.
 
@@ -28,19 +28,19 @@ Premiere's public API does not expose which keyframes are highlighted in Effect 
 
 The first Adobe query waits until you enter the editor, so opening the panel does not query a project during Premiere startup.
 
-One click applies the same curve to every animated property with a keyframe pair around the playhead; Premiere does not let panels read which keyframes are selected. If any property cannot take the curve (for example Opacity overshooting 0–100), Apply stays disabled and names it. The motion preview was removed at the user's request on 2026-11-18. Native values are checked at sampled frames, allowing only bounded storage rounding for generated scalar values. Subframe rendering and motion blur are outside that guarantee.
+One click applies the same curve to every checked property with a keyframe pair around the playhead; Premiere does not let panels read which keyframes are selected, so the panel offers them all and you uncheck the rest. A new keyframe pair starts with every property checked; reapplying to the same pair keeps your choice. If any property cannot take the curve (for example Opacity overshooting 0–100), Apply stays disabled and names it. The motion preview was removed at the user's request on 2026-11-18. Native values are checked at sampled frames, allowing only bounded storage rounding for generated scalar values. Subframe rendering and motion blur are outside that guarantee.
 
 ## Install on Windows
 
 1. Save your project and close Premiere Pro.
-2. Download [z-motion-1.2.0-setup.exe](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-setup.exe), run it and choose **Install Z Motion**.
+2. Download [z-motion-1.2.1-setup.exe](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.1/z-motion-1.2.1-setup.exe), run it and choose **Install Z Motion**.
 3. Open Premiere Pro 2026, then **Window > Extensions > Z Motion**. Some workspaces label this menu **Extensions (Legacy)**.
 
 The installer includes the compiled panel, host script, original Z icon, Argentum Sans fonts and documentation. No Node.js, npm, After Effects or separate font installation is required on the editing machine. Premiere Pro 26.x with CEP 12 must already be installed through your Adobe account. Windows PowerShell and .NET Framework are used by setup.
 
 This is an unsigned build. Setup explains the per-user Adobe setting `HKCU\Software\Adobe\CSXS.12\PlayerDebugMode=1`, required for unsigned CEP panels, and records its previous value. No machine-wide execution policy is changed. Publisher signing and Adobe Marketplace distribution are separate work.
 
-Alternatively, download [z-motion-1.2.0-windows.zip](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-windows.zip), extract it completely and run `install-z-motion.cmd`. [SHA-256 checksums](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-sha256sums.txt) are available for both packages. To use a nonstandard Premiere location:
+Alternatively, download [z-motion-1.2.1-windows.zip](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.1/z-motion-1.2.1-windows.zip), extract it completely and run `install-z-motion.cmd`. [SHA-256 checksums](https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.1/z-motion-1.2.1-sha256sums.txt) are available for both packages. To use a nonstandard Premiere location:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-z-motion.ps1 -EnableUnsigned -PremierePath 'D:\Adobe\Adobe Premiere Pro 2026'
