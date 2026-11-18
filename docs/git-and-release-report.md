@@ -1,5 +1,18 @@
 # Git and GitHub publication report
 
+## Version 1.2.0 — 2026-11-18
+
+The user asked for the session's changes to be committed to GitHub and released.
+
+- Pushed four Conventional Commits to main, ending at `8b71d0e5e90d1a6c5160301d6b66859b6d0e85e8`: the agent skills lock, the host's add-transform operation and Transform interpolation fix, the panel changes (curves on every keyed property, Add Transform, dark theme, blocked-click and layout fixes) and the 1.2.0 version bump with documentation.
+- [GitHub Actions run 44347975231](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/44347975231) passed on ubuntu-latest and windows-latest: lint, coverage, production packaging and 21 browser flows; Windows also passed installer lifecycle, installer compilation and isolated EXE installation.
+- Created and pushed the annotated `v1.2.0` tag on that tested commit.
+- Published [Z Motion 1.2.0 — Multi-property curves, Add Transform and dark theme](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) as Latest after verifying the draft: the uploaded `z-motion-1.2.0-setup.exe`, `z-motion-1.2.0-windows.zip` and `z-motion-1.2.0-sha256sums.txt` match the local files in size and SHA-256.
+- Locally, before publication: ESLint, TypeScript, 136 automated tests, 21 browser flows, installer lifecycle, Windows packaging and isolated EXE installation passed. The local `.claude/` folder (agent skills and preview settings) was not committed.
+- Native verification is limited: the user confirmed in Premiere 26.5.1 that Add Transform adds the effect. The Transform interpolation fix, multi-property application and dark theme were installed for the user but not confirmed natively by the agent.
+
+[v1-2-0-verification.json](releases/v1-2-0-verification.json) records the release, asset digests, source commit and CI jobs. This record follows the tagged commit; the tag stays on the tested source.
+
 ## Version 1.1.2 — 2026-11-05
 
 The user approved the clip-wide motion blur version and explicitly requested publication. The repository was already public; visibility was preserved.

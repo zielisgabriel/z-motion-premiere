@@ -1,6 +1,10 @@
 # Z Motion implementation report
 
-## Current version: 1.1.2
+## Current version: 1.2.0
+
+Date: 2026-11-18. [Version 1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) is published as Latest from the CI-tested commit `8b71d0e5e90d1a6c5160301d6b66859b6d0e85e8`. It applies one curve to every property keyed around the playhead (the property chooser and motion preview are removed), adds Add Transform to clip through Premiere's QE DOM, adds a dark theme and fixes clicks swallowed by selection reloads. See the [release notes](releases/v1-2-0.md), the [bug report](bug-fixes/panel-apply-click-and-layout.md) and the amended [curve](decisions/curve-only-v1.md) and [motion blur](decisions/transform-motion-blur.md) decisions.
+
+## Version 1.1.2
 
 Date: 2026-11-05. Fixed the user's selected-clip motion blur failure: the existing Transform in their saved project uses `AE.ADBE Geometry2`, which 1.1.1 did not recognize. Both Transform versions are now recognized. Blur has a separate clip context, independent of curve keys, cursor access, speed and direction. The panel identifies the selected clip and adds Refresh clip plus the explicit Apply blur to clip label. See the [detection fix](bug-fixes/transform-motion-blur-detection.md).
 

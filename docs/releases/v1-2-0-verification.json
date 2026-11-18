@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-18",
+  "repository": "zielisgabriel/z-motion-premiere",
+  "visibility": "public",
+  "latest": "v1.2.0",
+  "sourceCommit": "8b71d0e5e90d1a6c5160301d6b66859b6d0e85e8",
+  "release": {
+    "id": 450265392,
+    "url": "https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0",
+    "draft": false,
+    "prerelease": false,
+    "publishedAt": "2026-11-18T16:37:38Z",
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-setup.exe",
+        "digest": "sha256:8328c3544b4b697084078a8c0dea4a41a7b705327b7f6a46d38c5124b1867c78",
+        "name": "z-motion-1.2.0-setup.exe",
+        "size": 469504
+      },
+      {
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-sha256sums.txt",
+        "digest": "sha256:13aadb2d312b4418f50f6fa202dfab4efdae0b14f1120066e2daf75ad76df591",
+        "name": "z-motion-1.2.0-sha256sums.txt",
+        "size": 186
+      },
+      {
+        "browser_download_url": "https://github.com/zielisgabriel/z-motion-premiere/releases/download/v1.2.0/z-motion-1.2.0-windows.zip",
+        "digest": "sha256:41661c63a3e877598603e9519365ce5dbdb8487bf9cdf730ca23625bb309177d",
+        "name": "z-motion-1.2.0-windows.zip",
+        "size": 453976
+      }
+    ]
+  },
+  "ci": {
+    "conclusion": "success",
+    "id": 44347975231,
+    "jobs": [
+      {
+        "conclusion": "success",
+        "name": "verify (windows-latest)",
+        "url": "https://github.com/zielisgabriel/z-motion-premiere/actions/runs/44347975231/job/134955493921"
+      },
+      {
+        "conclusion": "success",
+        "name": "verify (ubuntu-latest)",
+        "url": "https://github.com/zielisgabriel/z-motion-premiere/actions/runs/44347975231/job/134955494705"
+      }
+    ],
+    "status": "completed",
+    "url": "https://github.com/zielisgabriel/z-motion-premiere/actions/runs/44347975231"
+  }
+}
