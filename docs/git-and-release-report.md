@@ -1,5 +1,18 @@
 # Git and GitHub publication report
 
+## Version 1.2.1 — 2026-11-18
+
+The user asked to choose which properties receive the curve and which Transform effects receive motion blur, then approved releasing both pickers as 1.2.1.
+
+- Pushed two Conventional Commits to main, ending at `66a0aa6089eb7aaa6fce3c17cd1cb5173c028007`: the checklist picker for curve properties and blur Transform effects, and the 1.2.1 version bump with documentation.
+- [GitHub Actions run 44389594192](https://github.com/zielisgabriel/z-motion-premiere/actions/runs/44389594192) passed on ubuntu-latest and windows-latest: lint, coverage, production packaging and 24 browser flows; Windows also passed installer lifecycle, installer compilation and isolated EXE installation.
+- Created and pushed the annotated `v1.2.1` tag on that tested commit.
+- Published [Z Motion 1.2.1 — Choose curve properties and Transform effects](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.1) as Latest after verifying the draft: the uploaded `z-motion-1.2.1-setup.exe`, `z-motion-1.2.1-windows.zip` and `z-motion-1.2.1-sha256sums.txt` match the local files in size and SHA-256.
+- Locally, before publication: ESLint, TypeScript, 147 automated tests, 24 browser flows, installer lifecycle, Windows packaging and isolated EXE installation passed. The local `.claude/` folder was not committed.
+- Native verification is limited: the pickers were installed for the user but not verified in Premiere by the agent.
+
+[v1-2-1-verification.json](releases/v1-2-1-verification.json) records the release, asset digests, source commit and CI jobs. This record follows the tagged commit; the tag stays on the tested source.
+
 ## Version 1.2.0 — 2026-11-18
 
 The user asked for the session's changes to be committed to GitHub and released.

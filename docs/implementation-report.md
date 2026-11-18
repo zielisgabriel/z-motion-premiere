@@ -1,6 +1,10 @@
 # Z Motion implementation report
 
-## Current version: 1.2.0
+## Current version: 1.2.1
+
+Date: 2026-11-18. [Version 1.2.1](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.1) is published as Latest from the CI-tested commit `66a0aa6089eb7aaa6fce3c17cd1cb5173c028007`. A summary button above Apply animation previews the checked properties and opens a checklist dialog to leave any out, for example a Twixtor speed curve; motion blur uses the same picker to choose among a clip's Transform effects and writes the angle to each checked one. See the [release notes](releases/v1-2-1.md) and the amended [curve](decisions/curve-only-v1.md) and [motion blur](decisions/transform-motion-blur.md) decisions.
+
+## Version 1.2.0
 
 Date: 2026-11-18. [Version 1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) is published as Latest from the CI-tested commit `8b71d0e5e90d1a6c5160301d6b66859b6d0e85e8`. It applies one curve to every property keyed around the playhead (the property chooser and motion preview are removed), adds Add Transform to clip through Premiere's QE DOM, adds a dark theme and fixes clicks swallowed by selection reloads. See the [release notes](releases/v1-2-0.md), the [bug report](bug-fixes/panel-apply-click-and-layout.md) and the amended [curve](decisions/curve-only-v1.md) and [motion blur](decisions/transform-motion-blur.md) decisions.
 
