@@ -7,10 +7,15 @@ import type {
   HostSnapshot,
   MotionBlurTarget,
 } from "./application/host-port";
-import { defaultCurve, type Curve } from "./domain/easing-curve";
+import {
+  defaultCurve,
+  type Curve,
+  type NumericValue,
+} from "./domain/easing-curve";
 import { CurveEditor } from "./presentation/curve-editor";
 import { MotionBlurControls } from "./presentation/motion-blur-controls";
 import { ThemeToggle } from "./presentation/theme-toggle";
+import { ChecklistPicker } from "./presentation/checklist-picker";
 import {
   applyTheme,
   panelStorage,
@@ -20,12 +25,26 @@ import {
 } from "./presentation/theme";
 import brandIcon from "../public/images/icon.png";
 
-/** Identifies the set of properties the user saw, to detect a changed set. */
-function propertySet(targets: CurveTarget[]) {
-  return targets.length
+/** Identifies the loaded keyframe pairs; a new pair resets the choice. */
+function pairKey(targets: CurveTarget[]) {
+  return targets
+    .map((target) => `${target.id}@${target.startTicks}-${target.endTicks}`)
+    .sort()
+    .join("|");
+}
+
+function displayValue(value: NumericValue): string {
+  return typeof value === "number"
+    ? Number(value.toFixed(3)).toString()
+    : value.map((coordinate) => Number(coordinate.toFixed(3))).join(", ");
+}
+
+/** Identifies the set of items the user saw, to detect a changed set. */
+function propertySet(items: { id: string }[]) {
+  return items.length
     ? {
-        id: targets
-          .map((target) => target.id)
+        id: items
+          .map((item) => item.id)
           .sort()
           .join("|"),
       }
@@ -41,17 +60,27 @@ interface Feedback {
 export default function App({ host }: { host: HostPort }) {
   const service = useMemo(() => createCurveService(host), [host]);
   const blurService = useMemo(() => createMotionBlurService(host), [host]);
-  const [blurTarget, setBlurTarget] = useState<MotionBlurTarget>();
-  const blurTargetRef = useRef<MotionBlurTarget | undefined>(undefined);
+  // Every Transform effect on the clip is offered for motion blur, all
+  // checked when the set of effects changes.
+  const [blurTargets, setBlurTargets] = useState<MotionBlurTarget[]>([]);
+  const blurTargetsRef = useRef<MotionBlurTarget[]>([]);
+  const [blurExcluded, setBlurExcluded] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const blurExcludedRef = useRef<ReadonlySet<string>>(new Set());
+  const blurKeyRef = useRef("");
   const selectionRef = useRef<string | undefined>(undefined);
-  const addedTransformId = useRef<string | undefined>(undefined);
   const [shutterAngle, setShutterAngle] = useState(180);
   const [curve, setCurve] = useState<Curve>(defaultCurve);
   const [theme, setTheme] = useState<Theme>(() => readTheme(panelStorage()));
   const [snapshot, setSnapshot] = useState<HostSnapshot | null>(null);
-  // Premiere does not expose keyframe selection, so the curve applies to
-  // every property with a keyframe pair around the playhead.
+  // Premiere does not expose keyframe selection: every property with a
+  // keyframe pair around the playhead is offered, all checked for a new pair,
+  // and the user can leave some out.
   const [targets, setTargets] = useState<CurveTarget[]>([]);
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const excludedRef = useRef<ReadonlySet<string>>(new Set());
+  const pairKeyRef = useRef("");
   // Reloading the Premiere selection is silent: only writes to Premiere
   // disable the controls, so a click that focuses the panel is never lost.
   const [loading, setLoading] = useState(false);
@@ -82,8 +111,8 @@ export default function App({ host }: { host: HostPort }) {
         if (mounted.current) {
           targetsRef.current = [];
           setTargets([]);
-          blurTargetRef.current = undefined;
-          setBlurTarget(undefined);
+          blurTargetsRef.current = [];
+          setBlurTargets([]);
           setInspectError((failure as Error).message);
         }
       }
@@ -94,19 +123,29 @@ export default function App({ host }: { host: HostPort }) {
       if (!mounted.current) return;
       targetsRef.current = next.targets;
       setTargets(next.targets);
+      const key = pairKey(next.targets);
+      if (key !== pairKeyRef.current) {
+        // A new pair starts with every property checked.
+        pairKeyRef.current = key;
+        excludedRef.current = new Set();
+        setExcluded(new Set());
+      }
       setSnapshot(next);
       selectionRef.current = next.motionBlur?.selectionToken;
-      const blurTargets = next.motionBlur?.targets ?? [];
-      // A Transform the panel just added wins over the previous choice.
-      const wantedBlur = addedTransformId.current ?? blurTargetRef.current?.id;
-      addedTransformId.current = undefined;
-      const selectedBlur =
-        blurTargets.find((candidate) => candidate.id === wantedBlur) ??
-        (blurTargets.length === 1 ? blurTargets[0] : undefined);
-      if (selectedBlur?.stateToken !== blurTargetRef.current?.stateToken)
-        setShutterAngle(selectedBlur?.shutterAngle || 180);
-      blurTargetRef.current = selectedBlur;
-      setBlurTarget(selectedBlur);
+      const effects = next.motionBlur?.targets ?? [];
+      blurTargetsRef.current = effects;
+      setBlurTargets(effects);
+      const blurKey = effects
+        .map((effect) => effect.id)
+        .sort()
+        .join("|");
+      if (blurKey !== blurKeyRef.current) {
+        // A different set of Transform effects starts with all checked.
+        blurKeyRef.current = blurKey;
+        blurExcludedRef.current = new Set();
+        setBlurExcluded(new Set());
+        setShutterAngle(effects[0]?.shutterAngle || 180);
+      }
       setInspectError("");
     }
   }, [host.available, service]);
@@ -182,9 +221,22 @@ export default function App({ host }: { host: HostPort }) {
     };
   }, [refresh]);
 
-  // Every property must accept the curve before anything is written.
+  const chosenTargets = useMemo(
+    () => targets.filter((target) => !excluded.has(target.id)),
+    [targets, excluded],
+  );
+  const chosenNow = () =>
+    targetsRef.current.filter((target) => !excludedRef.current.has(target.id));
+
+  function chooseProperties(next: ReadonlySet<string>) {
+    excludedRef.current = next;
+    setExcluded(next);
+    clearStatus();
+  }
+
+  // Every chosen property must accept the curve before anything is written.
   const curveProblem = useMemo(() => {
-    for (const target of targets) {
+    for (const target of chosenTargets) {
       try {
         service.prepare(target, curve);
       } catch (failure) {
@@ -192,16 +244,16 @@ export default function App({ host }: { host: HostPort }) {
       }
     }
     return "";
-  }, [service, targets, curve]);
+  }, [service, chosenTargets, curve]);
 
   async function apply() {
     if (curveProblem) return;
     await write(
       "curve",
-      propertySet(targets),
-      () => propertySet(targetsRef.current),
+      propertySet(chosenTargets),
+      () => propertySet(chosenNow()),
       async () => {
-        const latest = targetsRef.current;
+        const latest = chosenNow();
         const applied: CurveTarget[] = [];
         const failures: string[] = [];
         const warnings: string[] = [];
@@ -223,7 +275,7 @@ export default function App({ host }: { host: HostPort }) {
           }
         }
         if (mounted.current) {
-          const next = latest.map(
+          const next = targetsRef.current.map(
             (target) => applied.find((item) => item.id === target.id) ?? target,
           );
           targetsRef.current = next;
@@ -248,13 +300,18 @@ export default function App({ host }: { host: HostPort }) {
     );
   }
 
-  function chooseBlurTarget(id: string) {
-    const chosen = snapshot?.motionBlur?.targets.find(
-      (candidate) => candidate.id === id,
+  const chosenBlur = useMemo(
+    () => blurTargets.filter((effect) => !blurExcluded.has(effect.id)),
+    [blurTargets, blurExcluded],
+  );
+  const chosenBlurNow = () =>
+    blurTargetsRef.current.filter(
+      (effect) => !blurExcludedRef.current.has(effect.id),
     );
-    blurTargetRef.current = chosen;
-    setBlurTarget(chosen);
-    setShutterAngle(chosen?.shutterAngle || 180);
+
+  function chooseBlur(next: ReadonlySet<string>) {
+    blurExcludedRef.current = next;
+    setBlurExcluded(next);
     clearStatus();
   }
 
@@ -269,7 +326,6 @@ export default function App({ host }: { host: HostPort }) {
       current,
       async (latest) => {
         const result = await blurService.addTransform(latest.id);
-        addedTransformId.current = result.transformId;
         added = true;
         return result.message;
       },
@@ -282,27 +338,49 @@ export default function App({ host }: { host: HostPort }) {
     const angle = shutterAngle;
     await write(
       "blur",
-      blurTarget,
-      () => blurTargetRef.current,
-      async (latest) => {
-        const result = await blurService.apply(latest, angle);
-        if (!mounted.current) return;
-        blurTargetRef.current = result.target;
-        setBlurTarget(result.target);
-        setSnapshot((current) =>
-          current?.motionBlur
-            ? {
-                ...current,
-                motionBlur: {
-                  ...current.motionBlur,
-                  targets: current.motionBlur.targets.map((item) =>
-                    item.id === result.target.id ? result.target : item,
-                  ),
-                },
-              }
-            : current,
-        );
-        return result.message;
+      propertySet(chosenBlur),
+      () => propertySet(chosenBlurNow()),
+      async () => {
+        const latest = chosenBlurNow();
+        const updated: MotionBlurTarget[] = [];
+        const failures: string[] = [];
+        let message = "";
+        // Each Transform is independent: one failure does not stop the rest.
+        for (const effect of latest) {
+          try {
+            const result = await blurService.apply(effect, angle);
+            updated.push(result.target);
+            message = result.message;
+          } catch (failure) {
+            failures.push(`${effect.label}: ${(failure as Error).message}`);
+          }
+        }
+        if (mounted.current && updated.length) {
+          const next = blurTargetsRef.current.map(
+            (item) => updated.find((effect) => effect.id === item.id) ?? item,
+          );
+          blurTargetsRef.current = next;
+          setBlurTargets(next);
+          setSnapshot((current) =>
+            current?.motionBlur
+              ? {
+                  ...current,
+                  motionBlur: { ...current.motionBlur, targets: next },
+                }
+              : current,
+          );
+        }
+        if (failures.length)
+          throw new Error(
+            failures.join(" ") +
+              (updated.length
+                ? ` Applied to ${updated.map((effect) => effect.label).join(", ")}.`
+                : ""),
+          );
+        if (latest.length === 1) return message;
+        return angle === 0
+          ? `Motion blur disabled for ${latest.length} Transform effects.`
+          : `Motion blur applied at ${angle} degrees to ${latest.length} Transform effects. Check playback in Premiere.`;
       },
     );
   }
@@ -319,14 +397,12 @@ export default function App({ host }: { host: HostPort }) {
   // Shown beside the Apply button so a small panel always explains why it is
   // disabled, even when the editor above is scrolled.
   const labels = targets.map((target) => target.label).join(", ");
-  const hint = targets.length
-    ? `Applies to: ${labels}`
-    : !host.available
-      ? "Open Z Motion in Premiere to load an existing keyframe pair."
-      : snapshot?.message ||
-        (loading
-          ? "Loading keyframes from Premiere…"
-          : "Place the playhead between two keyframes in Effect Controls.");
+  const hint = !host.available
+    ? "Open Z Motion in Premiere to load an existing keyframe pair."
+    : snapshot?.message ||
+      (loading
+        ? "Loading keyframes from Premiere…"
+        : "Place the playhead between two keyframes in Effect Controls.");
 
   const curveFeedback = feedback?.channel === "curve" ? feedback : undefined;
   const curveError =
@@ -386,11 +462,12 @@ export default function App({ host }: { host: HostPort }) {
           <CurveEditor curve={curve} onChange={changeCurve} />
           <MotionBlurControls
             snapshot={snapshot?.motionBlur}
-            target={blurTarget}
+            targets={blurTargets}
+            excluded={blurExcluded}
             angle={shutterAngle}
             pending={applying}
             available={host.available}
-            onTargetChange={chooseBlurTarget}
+            onChoose={chooseBlur}
             onAngleChange={(next) => {
               setShutterAngle(next);
               clearStatus();
@@ -403,16 +480,33 @@ export default function App({ host }: { host: HostPort }) {
         </section>
       </main>
       <div className="apply-section">
-        {/* One line of text above the button: the latest result or, when there
-            is none, the hint. It also describes the button for screen readers. */}
+        {/* Above the button: the latest result, then the chosen properties
+            (or why nothing can be applied). The first of them describes the
+            button for screen readers. */}
         {curveError ? (
-          <p className="feedback error" role="alert" id="apply-hint">
+          <p className="feedback error" role="alert" id="apply-feedback">
             {curveError}
           </p>
         ) : curveStatus ? (
-          <p className="feedback" role="status" id="apply-hint">
+          <p className="feedback" role="status" id="apply-feedback">
             {curveStatus}
           </p>
+        ) : null}
+        {targets.length ? (
+          <ChecklistPicker
+            items={targets}
+            excluded={excluded}
+            disabled={applying}
+            title="Properties to animate"
+            note="Keyframe pairs around the playhead."
+            verb="Animates"
+            empty="Choose at least one property to animate."
+            detail={(target) =>
+              `${displayValue(target.startValue)} → ${displayValue(target.endValue)}`
+            }
+            summaryId="apply-targets"
+            onChange={chooseProperties}
+          />
         ) : (
           <p className="apply-hint" id="apply-hint">
             {hint}
@@ -421,11 +515,20 @@ export default function App({ host }: { host: HostPort }) {
         <button
           className="primary-button"
           disabled={
-            !host.available || !targets.length || !!curveProblem || applying
+            !host.available ||
+            !chosenTargets.length ||
+            !!curveProblem ||
+            applying
           }
           onClick={() => void apply()}
           aria-label="Apply animation"
-          aria-describedby="apply-hint"
+          aria-describedby={
+            curveError || curveStatus
+              ? "apply-feedback"
+              : targets.length
+                ? "apply-targets"
+                : "apply-hint"
+          }
         >
           {applying ? "Working in Premiere…" : "Apply animation"}
           <span aria-hidden="true">↗</span>

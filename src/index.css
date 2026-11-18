@@ -198,29 +198,6 @@ main {
   text-align: right;
   overflow-wrap: anywhere;
 }
-.property-choice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  font-size: 9px;
-}
-.property-choice span {
-  flex: none;
-}
-.property-choice select {
-  width: 100%;
-  min-width: 0;
-  height: 31px;
-  padding: 4px 7px;
-  background: var(--paper);
-  border: 1px solid var(--ink);
-  font-size: 10px;
-}
-.property-choice option {
-  background: var(--paper);
-  color: var(--ink);
-}
 
 .curve-monitor {
   background: var(--monitor);
@@ -421,9 +398,6 @@ main {
 .add-transform:hover:not(:disabled) > span {
   color: var(--paper);
 }
-.blur-choice {
-  margin-bottom: 9px;
-}
 .blur-adjustment {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -491,6 +465,130 @@ main {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+.property-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  margin-bottom: 8px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  text-align: left;
+  font-size: 9px;
+}
+.property-summary:hover:not(:disabled) {
+  border-color: var(--accent-text);
+}
+.property-summary-list {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.property-summary-count {
+  flex: none;
+  padding: 2px 5px;
+  color: var(--paper);
+  background: var(--ink);
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.property-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgb(10 10 10 / 0.6);
+}
+.property-dialog {
+  width: 100%;
+  max-width: 360px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--red);
+}
+.property-dialog h2 {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.property-dialog-note {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.property-options {
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ink);
+}
+.property-options li {
+  border-bottom: 1px solid var(--ink);
+}
+.property-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 10px;
+  cursor: pointer;
+}
+.property-options input {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--red);
+}
+.property-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.property-range {
+  flex: none;
+  color: var(--muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.property-dialog-actions {
+  display: flex;
+  gap: 6px;
+}
+.property-dialog-actions button {
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 700;
+}
+.property-dialog-actions button:hover {
+  color: var(--paper);
+  background: var(--ink);
+}
+.property-dialog-actions .property-done {
+  margin-left: auto;
+  color: var(--paper);
+  background: var(--ink);
+}
+.property-dialog-actions .property-done:hover {
+  color: var(--on-red);
+  background: var(--red);
 }
 .primary-button {
   display: flex;
@@ -564,11 +662,6 @@ main {
   }
   .apply-section {
     padding: 10px 12px 8px;
-  }
-  .property-choice {
-    flex-direction: column;
-    gap: 4px;
-    align-items: start;
   }
 }
 

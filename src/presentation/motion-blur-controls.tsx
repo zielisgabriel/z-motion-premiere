@@ -3,33 +3,53 @@ import type {
   MotionBlurTarget,
 } from "../application/host-port";
 import { shutterPresets, validateShutterAngle } from "../domain/motion-blur";
+import { ChecklistPicker } from "./checklist-picker";
+
+function shutterSetting(effect: MotionBlurTarget) {
+  return effect.useCompositionShutterAngle
+    ? "composition"
+    : `${effect.shutterAngle}°`;
+}
 
 export function MotionBlurControls({
   snapshot,
-  target,
+  targets,
+  excluded,
   angle,
   pending,
   available,
   feedback,
-  onTargetChange,
+  onChoose,
   onAngleChange,
   onApply,
   onAddTransform,
   onRefresh,
 }: {
   snapshot?: MotionBlurSnapshot;
-  target?: MotionBlurTarget;
+  /** Every Transform effect on the selected clip. */
+  targets: MotionBlurTarget[];
+  /** Transform effects the user unchecked. */
+  excluded: ReadonlySet<string>;
   angle: number;
   pending: boolean;
   available: boolean;
   feedback?: { tone: "status" | "error"; text: string };
-  onTargetChange: (id: string) => void;
+  onChoose: (excluded: Set<string>) => void;
   onAngleChange: (angle: number) => void;
   onApply: () => void;
   onAddTransform: () => void;
   onRefresh: () => void;
 }) {
   const selectedClips = snapshot?.selectedClips ?? 0;
+  const chosen = targets.filter((effect) => !excluded.has(effect.id));
+  const settings = new Set(chosen.map(shutterSetting));
+  const current = !targets.length
+    ? "Transform effect"
+    : !chosen.length
+      ? "No Transform chosen"
+      : settings.size === 1
+        ? `Current: ${[...settings][0]}`
+        : "Current: mixed";
   let invalid = "";
   try {
     validateShutterAngle(angle);
@@ -40,13 +60,7 @@ export function MotionBlurControls({
     <section className="motion-blur-controls" aria-label="Motion blur">
       <div className="blur-heading">
         <h2>Motion blur</h2>
-        <span>
-          {target
-            ? target.useCompositionShutterAngle
-              ? "Current: composition"
-              : `Current: ${target.shutterAngle}°`
-            : "Transform effect"}
-        </span>
+        <span>{current}</span>
       </div>
       <div className="blur-selection">
         {snapshot?.clipName ? (
@@ -77,23 +91,18 @@ export function MotionBlurControls({
           ? `Add Transform to ${selectedClips} clips`
           : "Add Transform to clip"}
       </button>
-      {snapshot && snapshot.targets.length > 1 && (
-        <label className="property-choice blur-choice">
-          <span>Transform effect</span>
-          <select
-            aria-label="Transform effect"
-            value={target?.id ?? ""}
-            disabled={pending}
-            onChange={(event) => onTargetChange(event.target.value)}
-          >
-            <option value="">Choose an effect</option>
-            {snapshot.targets.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      {targets.length > 1 && (
+        <ChecklistPicker
+          items={targets}
+          excluded={excluded}
+          disabled={pending}
+          title="Transform effects to blur"
+          note="Transform effects on the selected clip."
+          verb="Blurs"
+          empty="Choose at least one Transform effect."
+          detail={shutterSetting}
+          onChange={onChoose}
+        />
       )}
       <div className="blur-adjustment">
         <label>
@@ -111,7 +120,7 @@ export function MotionBlurControls({
         <button
           className="blur-apply"
           type="button"
-          disabled={!available || !target || pending || !!invalid}
+          disabled={!available || !chosen.length || pending || !!invalid}
           onClick={onApply}
         >
           Apply blur to clip
@@ -152,10 +161,10 @@ export function MotionBlurControls({
       <p className="target-hint">
         {!available
           ? "Open Z Motion in Premiere to apply motion blur."
-          : target
+          : chosen.length
             ? "Applies to this clip's Transform for its full duration. No keyframe selection needed."
-            : snapshot?.targets.length
-              ? "Choose the Transform effect to adjust."
+            : targets.length
+              ? "Choose at least one Transform effect."
               : snapshot?.message ||
                 "Select a clip with the Transform effect. No keyframe selection needed."}
       </p>

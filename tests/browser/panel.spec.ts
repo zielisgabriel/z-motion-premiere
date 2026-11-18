@@ -237,23 +237,63 @@ test("applies and disables blur without writing animation or needing a current k
   });
 });
 
-test("chooses among Transform effects and retains native errors", async ({
+test("blurs every checked Transform and names native errors", async ({
   page,
 }) => {
   await attachHost(page, { blur: true, multipleBlur: true, reject: true });
   await page.goto("/");
   await page.locator(".workspace").hover();
   await expect(
-    page.getByRole("button", { name: "Apply blur to clip" }),
-  ).toBeDisabled();
-  await page
-    .getByLabel("Transform effect", { exact: true })
-    .selectOption("transform-2");
+    page.getByRole("button", { name: "Transform effects to blur: 2 of 2" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Apply blur to clip" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "changed after the preview",
+  const blur = page.getByRole("region", { name: "Motion blur" });
+  await expect(blur.getByRole("alert")).toContainText(
+    "Transform (3): The keyframes changed after the preview.",
   );
+  await expect(blur.getByRole("alert")).toContainText("Transform (4):");
   await expect(page.getByRole("status")).toHaveCount(0);
+});
+
+test("the Transform picker limits motion blur in a 280×400 panel", async ({
+  page,
+}) => {
+  await attachHost(page, { blur: true, multipleBlur: true, noPair: true });
+  await page.setViewportSize({ width: 280, height: 400 });
+  await page.goto("/");
+  await page.locator(".workspace").hover();
+  const summary = page.getByRole("button", {
+    name: "Transform effects to blur: 2 of 2",
+  });
+  await expect(summary).toContainText("Blurs Transform (3), Transform (4)");
+  await summary.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Transform effects to blur",
+  });
+  await expect(dialog).toBeInViewport({ ratio: 1 });
+  await dialog.getByRole("checkbox", { name: /Transform \(3\)/ }).uncheck();
+  await page.screenshot({
+    path: "artifacts/blur-picker-280x400.png",
+    animations: "disabled",
+  });
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Apply blur to clip" }).click();
+  await expect(
+    page.getByRole("region", { name: "Motion blur" }).getByRole("status"),
+  ).toContainText("180 degrees");
+  const blurred = await page.evaluate(() =>
+    (
+      window as unknown as {
+        curveRequests: {
+          operation: string;
+          payload: { target: { id: string } };
+        }[];
+      }
+    ).curveRequests
+      .filter((request) => request.operation === "apply-motion-blur")
+      .map((request) => request.payload.target.id),
+  );
+  expect(blurred).toEqual(["transform-2"]);
 });
 
 for (const width of [280, 400, 1100]) {
@@ -418,9 +458,9 @@ for (const [width, height] of [
     const apply = page.getByRole("button", { name: "Apply animation" });
     await expect(apply).toBeInViewport();
     await expect(apply).toHaveAccessibleDescription(
-      "Applies to: Motion / Position, Motion / Rotation",
+      "Animates Motion / Position, Motion / Rotation",
     );
-    await expect(page.locator("#apply-hint")).toBeInViewport();
+    await expect(page.locator("#apply-targets")).toBeInViewport();
     const overflow = await page.evaluate(() => ({
       vertical: document.documentElement.scrollHeight - innerHeight,
       horizontal: document.documentElement.scrollWidth - innerWidth,
@@ -618,3 +658,63 @@ test("the theme chosen in the header survives reopening the panel", async ({
     page.getByRole("button", { name: "Dark theme" }),
   ).toHaveAttribute("aria-pressed", "true");
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`the property picker fits a 280×400 panel and limits Apply (${theme})`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (value) => localStorage.setItem("z-motion-theme", value),
+      theme,
+    );
+    await attachHost(page, { ambiguous: true });
+    await page.setViewportSize({ width: 280, height: 400 });
+    await page.goto("/");
+    await page.locator(".workspace").hover();
+    const summary = page.getByRole("button", {
+      name: "Properties to animate: 2 of 2",
+    });
+    await expect(summary).toContainText(
+      "Animates Motion / Position, Motion / Rotation",
+    );
+    await summary.click();
+    const dialog = page.getByRole("dialog", { name: "Properties to animate" });
+    await expect(dialog).toBeInViewport({ ratio: 1 });
+    await expect(
+      dialog.getByRole("checkbox", { name: /Motion \/ Position/ }),
+    ).toBeFocused();
+    await dialog
+      .getByRole("checkbox", { name: /Motion \/ Rotation/ })
+      .uncheck();
+    await page.screenshot({
+      path: `artifacts/property-picker-${theme}-280x400.png`,
+      animations: "disabled",
+    });
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Properties to animate: 1 of 2" }),
+    ).toBeFocused();
+    await page.getByRole("button", { name: "Apply animation" }).click();
+    await expect(page.getByRole("status")).toContainText(
+      "24 intermediate keyframes",
+    );
+    const applied = await page.evaluate(() =>
+      (
+        window as unknown as {
+          curveRequests: {
+            operation: string;
+            payload: { target: { id: string } };
+          }[];
+        }
+      ).curveRequests
+        .filter((request) => request.operation === "apply-curve")
+        .map((request) => request.payload.target.id),
+    );
+    expect(applied).toEqual(["position-1"]);
+    await page.screenshot({
+      path: `artifacts/property-summary-${theme}-280x400.png`,
+      animations: "disabled",
+    });
+  });
+}

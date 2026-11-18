@@ -265,7 +265,7 @@ describe("Apply explains itself next to the button", () => {
     expect(
       await screen.findByRole("button", {
         name: "Apply animation",
-        description: "Applies to: Motion / Position, Motion / Scale",
+        description: "Animates Motion / Position, Motion / Scale",
       }),
     ).toBeTruthy();
   });
@@ -274,7 +274,12 @@ describe("Apply explains itself next to the button", () => {
     render(<App host={createTestHost()} />);
     enterPanel();
     await screen.findByText("Motion / Position");
-    expect(screen.getByText("Applies to: Motion / Position")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Apply animation",
+        description: "Animates Motion / Position",
+      }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Apply animation" }));
     expect(
       await screen.findByRole("button", {
@@ -282,7 +287,8 @@ describe("Apply explains itself next to the button", () => {
         description: "24 intermediate keyframes updated. Endpoints preserved.",
       }),
     ).toBeTruthy();
-    expect(screen.queryByText("Applies to: Motion / Position")).toBeNull();
+    // The closed picker still previews what the next click animates.
+    expect(screen.getByText("Animates Motion / Position")).toBeTruthy();
   });
 
   it("tells the user to place the playhead when Premiere reports no pair", async () => {
@@ -528,52 +534,6 @@ describe("motion blur controls", () => {
     expect(blurWrites).toBe(0);
   });
 
-  it("requires a choice when multiple Transform effects qualify", async () => {
-    render(
-      <App
-        host={createTestHost({
-          inspect: async () => ({
-            hostVersion: "26.5.1",
-            message: "",
-            targets: [],
-            motionBlur: {
-              targets: [
-                motionBlurTarget,
-                {
-                  ...motionBlurTarget,
-                  id: "transform-2",
-                  label: "Transform (4)",
-                  shutterAngle: 90,
-                },
-              ],
-              message: "",
-            },
-          }),
-        })}
-      />,
-    );
-    enterPanel();
-    const select = await screen.findByLabelText("Transform effect");
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Apply blur to clip",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-    fireEvent.change(select, { target: { value: "transform-2" } });
-    expect(
-      (screen.getByLabelText("Shutter angle (°)") as HTMLInputElement).value,
-    ).toBe("90");
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Apply blur to clip",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(false);
-  });
-
   it("keeps offline writes disabled and rejects an empty or out-of-range angle", async () => {
     const { unmount } = render(<App host={createCepHost()} />);
     expect(
@@ -712,7 +672,7 @@ describe("Add Transform button", () => {
     ).toBe(false);
   });
 
-  it("still adds another Transform when the clip has one, and selects the new one", async () => {
+  it("still adds another Transform when the clip has one, and offers both for blur", async () => {
     const { host, tokens } = clipGainingTransforms(1);
     render(<App host={host} />);
     enterPanel();
@@ -720,10 +680,11 @@ describe("Add Transform button", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add Transform to clip" }),
     );
-    const select = (await screen.findByLabelText(
-      "Transform effect",
-    )) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe("transform-2"));
+    expect(
+      await screen.findByRole("button", {
+        name: "Transform effects to blur: 2 of 2",
+      }),
+    ).toBeTruthy();
     expect(tokens).toHaveLength(1);
   });
 
@@ -967,5 +928,353 @@ describe("light and dark themes", () => {
         .getAttribute("aria-pressed"),
     ).toBe("true");
     expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+});
+
+describe("choosing which properties to animate", () => {
+  const scale = {
+    ...curveTarget,
+    id: "scale-1",
+    label: "Transform / Scale",
+    kind: "scale" as const,
+    startValue: 100,
+    endValue: 126.9,
+  };
+  const opacity = {
+    ...curveTarget,
+    id: "opacity-1",
+    label: "Opacity / Opacity",
+    kind: "opacity" as const,
+    startValue: 0,
+    endValue: 100,
+    limits: [0, 100] as [number, number],
+  };
+  const twixtor = {
+    ...curveTarget,
+    id: "twixtor-1",
+    label: "Twixtor / Speed %",
+    kind: "value" as const,
+    startValue: 100,
+    endValue: 20,
+  };
+  function threeProperties(overrides: Partial<HostPort> = {}) {
+    return createTestHost({
+      inspect: async () => ({
+        hostVersion: "26.5.1",
+        targets: [scale, opacity, twixtor],
+        message: "",
+      }),
+      ...overrides,
+    });
+  }
+  const summary = (chosen: number, total = 3) =>
+    screen.getByRole("button", {
+      name: `Properties to animate: ${chosen} of ${total}`,
+    });
+  const applyButton = () =>
+    screen.getByRole("button", {
+      name: "Apply animation",
+    }) as HTMLButtonElement;
+
+  it("previews the chosen properties while the picker is closed", async () => {
+    render(<App host={threeProperties()} />);
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    expect(summary(3).textContent).toContain(
+      "Animates Transform / Scale, Opacity / Opacity, Twixtor / Speed %",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("animates only the properties left checked", async () => {
+    const applied: string[] = [];
+    render(
+      <App
+        host={threeProperties({
+          apply: async (target, plan) => {
+            applied.push(target.id);
+            return {
+              keyframesWritten: plan.samples.length - 2,
+              message: "",
+              target,
+            };
+          },
+        })}
+      />,
+    );
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    fireEvent.click(summary(3));
+    const dialog = screen.getByRole("dialog", {
+      name: "Properties to animate",
+    });
+    const speed = within(dialog).getByRole("checkbox", {
+      name: /Twixtor \/ Speed %/,
+    }) as HTMLInputElement;
+    expect(speed.checked).toBe(true);
+    fireEvent.click(speed);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(summary(2).textContent).toContain(
+      "Animates Transform / Scale, Opacity / Opacity",
+    );
+    expect(summary(2).textContent).not.toContain("Twixtor");
+    fireEvent.click(applyButton());
+    await screen.findByRole("status");
+    expect(applied).toEqual(["scale-1", "opacity-1"]);
+  });
+
+  it("does not let a property left out block Apply", async () => {
+    render(<App host={threeProperties()} />);
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    fireEvent.click(screen.getByRole("button", { name: "Overshoot" }));
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Opacity / Opacity",
+    );
+    expect(applyButton().disabled).toBe(true);
+    fireEvent.click(summary(3));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Opacity \/ Opacity/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(applyButton().disabled).toBe(false);
+  });
+
+  it("keeps Apply disabled until at least one property is chosen", async () => {
+    render(<App host={threeProperties()} />);
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    fireEvent.click(summary(3));
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(applyButton().disabled).toBe(true);
+    expect(
+      screen.getByRole("button", {
+        name: "Apply animation",
+        description: "Choose at least one property to animate.",
+      }),
+    ).toBeTruthy();
+    fireEvent.click(summary(0));
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(applyButton().disabled).toBe(false);
+  });
+
+  it("checks every property again when a new keyframe pair loads", async () => {
+    let pair = [scale, opacity, twixtor];
+    render(
+      <App
+        host={createTestHost({
+          inspect: async () => ({
+            hostVersion: "26.5.1",
+            targets: pair,
+            message: "",
+          }),
+        })}
+      />,
+    );
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    fireEvent.click(summary(3));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Twixtor/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    const workspace = screen.getByRole("main", {
+      name: "Curve editor",
+    }).parentElement!;
+    // Reloading the same pair keeps the choice.
+    fireEvent.pointerLeave(workspace);
+    enterPanel();
+    await act(async () => {});
+    expect(summary(2)).toBeTruthy();
+    // The playhead moved to a later pair of the same properties.
+    pair = pair.map((target) => ({
+      ...target,
+      startTicks: "2794176000000",
+      endTicks: "3048192000000",
+    }));
+    fireEvent.pointerLeave(workspace);
+    enterPanel();
+    await waitFor(() => expect(summary(3)).toBeTruthy());
+  });
+
+  it("closes with Escape and returns focus to the summary", async () => {
+    render(<App host={threeProperties()} />);
+    enterPanel();
+    await screen.findByText("3 animated properties");
+    const trigger = summary(3);
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", {
+      name: "Properties to animate",
+    });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("choosing which Transform effects get motion blur", () => {
+  const first = motionBlurTarget;
+  const second = {
+    ...motionBlurTarget,
+    id: "transform-2",
+    label: "Transform (4)",
+    shutterAngle: 90,
+    useCompositionShutterAngle: false,
+    stateToken: "second-shutter",
+  };
+  function clipWith(
+    targets: (typeof motionBlurTarget)[],
+    overrides: Partial<HostPort> = {},
+  ) {
+    const base = createTestHost();
+    return createTestHost({
+      inspect: async () => ({
+        hostVersion: "26.5.1",
+        targets: [],
+        message: "",
+        motionBlur: {
+          targets,
+          message: "",
+          clipName: "mouse-arrow.png",
+          selectedClips: 1,
+          selectionToken: "selection-1",
+        },
+      }),
+      applyMotionBlur: base.applyMotionBlur,
+      ...overrides,
+    });
+  }
+  const blurSummary = (chosen: number, total = 2) =>
+    screen.getByRole("button", {
+      name: `Transform effects to blur: ${chosen} of ${total}`,
+    });
+
+  it("checks every Transform on the clip and previews them while closed", async () => {
+    render(<App host={clipWith([first, second])} />);
+    enterPanel();
+    await screen.findByText("Clip: mouse-arrow.png");
+    expect(blurSummary(2).textContent).toContain(
+      "Blurs Transform (3), Transform (4)",
+    );
+    expect(screen.queryByLabelText("Transform effect")).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Apply blur to clip",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+
+  it("blurs only the Transform effects left checked", async () => {
+    const applied: { id: string; angle: number }[] = [];
+    const base = createTestHost();
+    render(
+      <App
+        host={clipWith([first, second], {
+          applyMotionBlur: async (target, angle) => {
+            applied.push({ id: target.id, angle });
+            return base.applyMotionBlur(target, angle);
+          },
+        })}
+      />,
+    );
+    enterPanel();
+    await screen.findByText("Clip: mouse-arrow.png");
+    fireEvent.click(blurSummary(2));
+    const dialog = screen.getByRole("dialog", {
+      name: "Transform effects to blur",
+    });
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: /Transform \(3\)/ }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    expect(blurSummary(1).textContent).toContain("Blurs Transform (4)");
+    fireEvent.click(screen.getByRole("button", { name: "360°" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply blur to clip" }));
+    const blur = screen.getByRole("region", { name: "Motion blur" });
+    expect((await within(blur).findByRole("status")).textContent).toContain(
+      "360 degrees",
+    );
+    expect(applied).toEqual([{ id: "transform-2", angle: 360 }]);
+  });
+
+  it("blurs every checked Transform with one click", async () => {
+    const applied: string[] = [];
+    const base = createTestHost();
+    render(
+      <App
+        host={clipWith([first, second], {
+          applyMotionBlur: async (target, angle) => {
+            applied.push(target.id);
+            return base.applyMotionBlur(target, angle);
+          },
+        })}
+      />,
+    );
+    enterPanel();
+    await screen.findByText("Clip: mouse-arrow.png");
+    fireEvent.click(screen.getByRole("button", { name: "Apply blur to clip" }));
+    const blur = screen.getByRole("region", { name: "Motion blur" });
+    expect((await within(blur).findByRole("status")).textContent).toContain(
+      "2 Transform effects",
+    );
+    expect(applied).toEqual(["transform-1", "transform-2"]);
+    expect(screen.getByText("Current: 180°")).toBeTruthy();
+  });
+
+  it("keeps blur disabled when no Transform is checked", async () => {
+    render(<App host={clipWith([first, second])} />);
+    enterPanel();
+    await screen.findByText("Clip: mouse-arrow.png");
+    fireEvent.click(blurSummary(2));
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Apply blur to clip",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(blurSummary(0).textContent).toContain(
+      "Choose at least one Transform effect.",
+    );
+  });
+
+  it("names the Transform Premiere rejected and the ones that were blurred", async () => {
+    const base = createTestHost();
+    render(
+      <App
+        host={clipWith([first, second], {
+          applyMotionBlur: async (target, angle) => {
+            if (target.id === "transform-1")
+              throw new Error("Shutter settings changed. Reload them.");
+            return base.applyMotionBlur(target, angle);
+          },
+        })}
+      />,
+    );
+    enterPanel();
+    await screen.findByText("Clip: mouse-arrow.png");
+    fireEvent.click(screen.getByRole("button", { name: "Apply blur to clip" }));
+    const blur = screen.getByRole("region", { name: "Motion blur" });
+    const alert = await within(blur).findByRole("alert");
+    expect(alert.textContent).toContain(
+      "Transform (3): Shutter settings changed. Reload them.",
+    );
+    expect(alert.textContent).toContain("Applied to Transform (4).");
+  });
+
+  it("needs no picker when the clip has a single Transform", async () => {
+    render(<App host={clipWith([first])} />);
+    enterPanel();
+    await screen.findByText("Current: composition");
+    expect(
+      screen.queryByRole("button", { name: /Transform effects to blur/ }),
+    ).toBeNull();
   });
 });
