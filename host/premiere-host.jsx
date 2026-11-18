@@ -74,6 +74,10 @@ var ZMotion = (function () {
         var actual = parameter.getValueAtKey(keyTime);
         if (!storedValueMatches(actual, value)) fail(valueMismatch(keyTime, value, actual) + ' Native result: ' + String(result) + '.');
     }
+    // Linear interpolation only shapes motion between frames; the value at every
+    // frame is verified separately. It is therefore best effort: Transform
+    // (AE.ADBE Geometry2) returns null here in Premiere 26.5.1, and a refusal
+    // is reported as a warning instead of failing a curve already written.
     function setLinear(parameter, keyTime, mode, updateUI) {
         var modes = [mode, mode === 'seconds' ? 'time' : 'seconds'];
         var index;
@@ -81,10 +85,10 @@ var ZMotion = (function () {
         for (index = 0; index < modes.length; index++) {
             try {
                 result = parameter.setInterpolationTypeAtKey(keyArgument(keyTime, modes[index]), 0, updateUI);
-                if (result === undefined || result === 0 || result === true) return;
+                if (result === undefined || result === null || result === 0 || result === true) return true;
             } catch (error) { result = String(error.message || error); }
         }
-        fail('Premiere rejected linear interpolation at ' + keyTime.seconds + 's. Native result: ' + String(result) + '.');
+        return false;
     }
     function clipContext() {
         var project = app.project;
@@ -276,7 +280,125 @@ var ZMotion = (function () {
         var targets = [];
         var index;
         for (index = 0; index < found.candidates.length; index++) targets.push(found.candidates[index].target);
-        return { targets: targets, message: targets.length ? '' : found.message, clipName: state.clip ? String(state.clip.name || 'Selected clip') : '' };
+        var selection = { clips: [], token: '' };
+        try { selection = selectedVideoClips(); } catch (error) { selection = { clips: [], token: '' }; }
+        return { targets: targets, message: targets.length ? '' : found.message, clipName: state.clip ? String(state.clip.name || 'Selected clip') : '', selectedClips: selection.clips.length, selectionToken: selection.token };
+    }
+    // Adding Transform uses Premiere's QE DOM: ExtendScript has no supported
+    // call to add an effect. QE finds effects by their localized name only.
+    var transformEffectNames = ['Transform', 'Transformar', 'Transformer', 'Transformieren', 'Trasforma'];
+    function isTransform(component) { return /^(AE\.)?ADBE Geometry2?$/.test(String(component.matchName)); }
+    function selectedVideoClips() {
+        var project = app.project;
+        var sequence = project && project.activeSequence;
+        if (!sequence) return { clips: [], token: '', message: 'Open a sequence and select at least one video clip.' };
+        var selection = sequence.getSelection();
+        var clips = [];
+        var ids = [];
+        var index;
+        for (index = 0; index < selection.length; index++) {
+            if (selection[index].mediaType !== 'Video') continue;
+            clips.push(selection[index]);
+            ids.push(String(selection[index].nodeId));
+        }
+        ids.sort();
+        return {
+            sequence: sequence, clips: clips,
+            token: ZMotionJson.stringify([String(project.documentID || project.path || ''), String(sequence.sequenceID), ids]),
+            message: clips.length ? '' : 'Select at least one video clip in the timeline.'
+        };
+    }
+    function transformIndexes(clip) {
+        var indexes = [];
+        var index;
+        for (index = 0; index < clip.components.numItems; index++) if (isTransform(clip.components[index])) indexes.push(index);
+        return indexes;
+    }
+    function locateClip(sequence, clip) {
+        var tracks = sequence.videoTracks;
+        // A TrackCollection is counted by numTracks; track.clips by numItems.
+        var trackCount = tracks ? Number(tracks.numTracks) || 0 : 0;
+        var trackIndex;
+        var clipIndex;
+        for (trackIndex = 0; trackIndex < trackCount; trackIndex++) {
+            var clips = tracks[trackIndex].clips;
+            for (clipIndex = 0; clipIndex < clips.numItems; clipIndex++) if (String(clips[clipIndex].nodeId) === String(clip.nodeId)) return { track: trackIndex, clip: clips[clipIndex] };
+        }
+        fail('Could not find the timeline track of ' + String(clip.name) + '.');
+    }
+    function transformEffect() {
+        if (typeof app.enableQE === 'function') app.enableQE();
+        if (typeof qe === 'undefined' || !qe || !qe.project) fail('Premiere did not allow Z Motion to add effects. Add Transform from the Effects panel.');
+        var index;
+        for (index = 0; index < transformEffectNames.length; index++) {
+            var effect = null;
+            try { effect = qe.project.getVideoEffectByName(transformEffectNames[index]); } catch (error) { effect = null; }
+            if (effect) return effect;
+        }
+        fail('Premiere could not find the Transform effect in this language. Add Transform from the Effects panel.');
+    }
+    function quickEditItem(qeSequence, trackIndex, clip) {
+        var track = qeSequence.getVideoTrackAt(trackIndex);
+        var matches = [];
+        var named = [];
+        var index;
+        // Clips cannot overlap on a track, so the start time identifies the
+        // item. QE may label it differently (e.g. "name [V]"), so the name only
+        // breaks an unexpected tie.
+        for (index = 0; track && index < track.numItems; index++) {
+            var item = track.getItemAt(index);
+            if (!item || item.type === 'Empty' || !item.start) continue;
+            if (String(item.start.ticks) !== String(clip.start.ticks)) continue;
+            matches.push(item);
+            if (String(item.name).indexOf(String(clip.name)) === 0) named.push(item);
+        }
+        if (matches.length === 1) return matches[0];
+        if (named.length === 1) return named[0];
+        fail('Could not identify ' + String(clip.name) + ' on video track ' + (trackIndex + 1) + '.');
+    }
+    function addTransformTo(sequence, qeSequence, effect, clip) {
+        var located = locateClip(sequence, clip);
+        var before = transformIndexes(located.clip).length;
+        var componentsBefore = located.clip.components.numItems;
+        quickEditItem(qeSequence, located.track, located.clip).addVideoEffect(effect);
+        var fresh = locateClip(sequence, clip).clip;
+        if (transformIndexes(fresh).length === before + 1) return fresh;
+        if (fresh.components.numItems > componentsBefore) fail('Premiere added a different effect to ' + String(clip.name) + '. Use Premiere Undo to remove it.');
+        fail('Premiere did not add Transform to ' + String(clip.name) + '.');
+    }
+    function addTransform(payload) {
+        var selection = selectedVideoClips();
+        if (!selection.clips.length) fail(selection.message);
+        if (typeof payload.selectionToken !== 'string' || payload.selectionToken !== selection.token) fail('The timeline selection changed. Return to the panel to reload it.');
+        var effect = transformEffect();
+        var qeSequence = qe.project.getActiveSequence();
+        if (!qeSequence) fail('Premiere did not expose the active sequence for adding effects.');
+        var added = [];
+        var problems = [];
+        var index;
+        for (index = 0; index < selection.clips.length; index++) {
+            try { added.push(addTransformTo(selection.sequence, qeSequence, effect, selection.clips[index])); }
+            catch (error) { problems.push(String(error.message || error)); }
+        }
+        if (!added.length) fail(problems.join(' '));
+        var total = selection.clips.length;
+        var result = {
+            added: added.length,
+            message: problems.length
+                ? 'Transform added to ' + added.length + ' of ' + total + ' clips. ' + problems.join(' ')
+                : total === 1
+                    ? 'Transform added to ' + String(added[0].name) + '. Animate its Position, Scale or Rotation to see motion blur.'
+                    : 'Transform added to ' + total + ' clips.'
+        };
+        if (total === 1) {
+            try {
+                var state = clipContext();
+                var indexes = state.clip ? transformIndexes(state.clip) : [];
+                var described = indexes.length ? describeMotionBlur(state, indexes[indexes.length - 1]) : null;
+                if (described) result.transformId = described.target.id;
+            } catch (error) { /* The panel reloads and lets the user pick the effect. */ }
+        }
+        return result;
     }
     function setShutterValue(parameter, value, checkbox) {
         var nativeResult;
@@ -360,6 +482,7 @@ var ZMotion = (function () {
         }
         for (index = 1; index < samples.length - 1; index++) expectedTimes[samples[index].timeTicks] = true;
         var writes = 0;
+        var unconfirmedInterpolation = 0;
         try {
             for (index = 0; index < candidate.keys.length; index++) {
                 var existing = candidate.keys[index];
@@ -378,7 +501,7 @@ var ZMotion = (function () {
                 var stored = parameter.getValueAtKey(actual);
                 var endpoint = index === 0 || index === samples.length - 1;
                 if (!(endpoint ? close(stored, samples[index].value) : storedValueMatches(stored, samples[index].value))) fail(valueMismatch(actual, samples[index].value, stored));
-                setLinear(parameter, actual, writeMode, index === samples.length - 1);
+                if (!setLinear(parameter, actual, writeMode, index === samples.length - 1)) unconfirmedInterpolation++;
             }
             for (index = 0; index < protectedKeys.length; index++) {
                 var preserved = keyIn(parameter.getKeys(), protectedKeys[index].time);
@@ -391,7 +514,9 @@ var ZMotion = (function () {
         var refreshed = inspect({ preferred: target });
         var updated = target;
         for (index = 0; index < refreshed.targets.length; index++) if (refreshed.targets[index].id === target.id) updated = refreshed.targets[index];
-        return { keyframesWritten: writes, message: 'Curve applied. Both endpoint values and times were preserved.', target: updated };
+        var result = { keyframesWritten: writes, message: 'Curve applied. Both endpoint values and times were preserved.', target: updated };
+        if (unconfirmedInterpolation) result.warning = 'Premiere did not confirm linear interpolation on ' + unconfirmedInterpolation + ' of ' + samples.length + ' keys; the value at every frame was verified.';
+        return result;
     }
     function dispatch(input) {
         try {
@@ -401,6 +526,7 @@ var ZMotion = (function () {
             if (request.operation === 'inspect') result = inspect(request.payload);
             else if (request.operation === 'apply-curve') result = applyCurve(request.payload);
             else if (request.operation === 'apply-motion-blur') result = applyMotionBlur(request.payload);
+            else if (request.operation === 'add-transform') result = addTransform(request.payload);
             else fail('Unknown Z Motion operation.');
             return ZMotionJson.stringify({ protocol: 2, ok: true, data: result });
         } catch (error) {

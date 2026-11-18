@@ -278,6 +278,34 @@ describe("existing-keyframe Premiere contract", () => {
     expect(host.frames.get("2560481280000")).toBe(60);
   });
 
+  it("accepts the null that Transform returns when setting linear interpolation", () => {
+    // Observed in Premiere 26.5.1 on Transform (AE.ADBE Geometry2) Position.
+    const host = fixture({
+      secondsOnly: true,
+      voidReturns: true,
+      value: [
+        [678, 1025],
+        [540, 960],
+      ],
+    });
+    host.parameter.setInterpolationTypeAtKey = () => null as unknown as number;
+    const result = host.apply();
+    expect(result).toMatchObject({ ok: true, data: { keyframesWritten: 3 } });
+    expect(result.data.warning).toBeUndefined();
+    expect(host.frames.get("2560481280000")).toEqual([609, 992.5]);
+  });
+
+  it("keeps the verified frame values when Premiere refuses linear interpolation, and says so", () => {
+    const host = fixture({ voidReturns: true });
+    host.parameter.setInterpolationTypeAtKey = () => 1;
+    const result = host.apply();
+    expect(result).toMatchObject({ ok: true, data: { keyframesWritten: 3 } });
+    expect(result.data.warning).toContain(
+      "did not confirm linear interpolation",
+    );
+    expect(host.frames.get("2560481280000")).toBe(60);
+  });
+
   it("writes Transform Position through seconds-based native mutation calls", () => {
     const host = fixture({
       secondsOnly: true,
