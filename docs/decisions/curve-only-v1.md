@@ -4,6 +4,8 @@ Status: accepted by the user on 2026-11-02. Supersedes the earlier toolkit proto
 
 Amendment, 2026-11-05: the user requested [Transform motion blur controls](transform-motion-blur.md). The existing curve workflow remains unchanged. The new independent blur action adjusts shutter settings and does not generate movement; the two-operation protocol description below is historical.
 
+Amendment, 2026-11-18: at the user's request the motion preview was removed and the property selector replaced. Because no Premiere API exposes keyframe selection (rechecked for ExtendScript and UXP 26.x), **Apply animation** now applies the curve to every eligible property whose keyframe pair surrounds the playhead, one host `apply-curve` call per property. The panel lists those properties above the button; a curve that one of them cannot take blocks Apply and names it. Each property is applied independently: a failure is reported with its property name and does not stop the others. Linear interpolation of the written keys is best effort because Transform (`AE.ADBE Geometry2`) returns `null` from `setInterpolationTypeAtKey` in Premiere 26.5.1 and ExtendScript cannot read interpolation back; the value at every frame remains verified, and an explicit refusal is returned as a warning. Step 2 and the preview in step 3 below are historical.
+
 ## Product boundary
 
 Version 1 edits easing between existing keyframes. The panel contains the curve editor, timing preview, a compact property choice when necessary, and one Apply Animation action. Transform and Presets navigation, the timeline selection summary, movement recipes, duration/amount/stagger inputs and preset storage are removed from the active application.

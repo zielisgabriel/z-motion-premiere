@@ -2,6 +2,18 @@
 
 Original builds were created on 2026-11-02. Git history and GitHub publication were completed on 2026-11-03. Earlier tags recover packaged runtime snapshots; they do not claim to restore missing TypeScript source history. See [release provenance](docs/release-history.md).
 
+## [1.2.0](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.2.0) — 2026-11-18
+
+Fixes **Apply animation** and **Apply blur to clip** ignoring a click that comes from Premiere: reloading the selection no longer disables the panel, and a write waits for a reload in flight. The reason Apply is unavailable, or the latest curve result, now sits right above the button. Motion blur results appear in the Motion blur section. The preview Z reaches the guide ticks and stays inside the stage; the 280×400 minimum panel no longer scrolls and short panels use a compact layout. See the [bug report](docs/bug-fixes/panel-apply-click-and-layout.md). Native Premiere application was not re-verified.
+
+Adds **Add Transform to clip** in the Motion blur section: one click adds the Transform effect to every selected video clip (another one if a clip already has it) and selects it for motion blur. It uses Premiere’s undocumented QE DOM; see the [decision](docs/decisions/transform-motion-blur.md#adding-transform-2026-11-18).
+
+**Apply animation** no longer asks which property to use: one click applies the curve to every property with a keyframe pair around the playhead (Position, Scale, Opacity…), listed above the button. The motion preview was removed. See the [amended curve decision](docs/decisions/curve-only-v1.md).
+
+Fixes curves on the **Transform** effect: Premiere 26.5.1 returns `null` when the host sets linear interpolation on Transform keys, which was treated as a failure after every frame value had already been written and verified. Interpolation is now best effort (an unconfirmed refusal becomes a warning), and one failing property no longer stops the others.
+
+Adds a **dark theme**. The sun/moon button in the header switches between the default light theme and a dark one built from the DESIGN.md palette (Pitch Black canvas, Vanilla type, Carmine accents, Rule Charcoal graph); the choice is remembered by the panel.
+
 ## [1.1.2](https://github.com/zielisgabriel/z-motion-premiere/releases/tag/v1.1.2) — 2026-11-05
 
 Adds clip-wide Transform motion blur, shutter angle 0–360°, Off/90°/180°/360° shortcuts and an independent Apply blur to clip action. Fixes disabled controls for Premiere's current `AE.ADBE Geometry2` Transform effect, confirmed in the user's saved project. Blur uses the selected clip independently of curve discovery, playback speed, playhead position and movement keyframes. The panel displays the clip name and provides Refresh clip. Shutter writes are verified and movement keyframes are preserved.
